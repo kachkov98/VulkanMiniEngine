@@ -1,0 +1,7 @@
+{
+  "name": "vulkan-mini-engine",
+  "version-string": "latest",
+  "dependencies": [
+    "cxxopts"
+  ]
+}
