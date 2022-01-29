@@ -1,0 +1,31 @@
+name: CI
+on: [push]
+
+jobs:
+  job:
+    name: ${{ matrix.os }}-${{ github.workflow }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - uses: lukka/get-cmake@latest
+
+      - name: Restore artifacts, or setup vcpkg for building artifacts
+        uses: lukka/run-vcpkg@v10
+        id: runvcpkg
+        with:
+          vcpkgJsonGlob: 'vcpkg.json'
+
+      - name: Run CMake+vcpkg+Ninja to generate/build.
+        uses: lukka/run-cmake@v10
+        id: runcmake
+        with:
+          configurePreset: 'ninja-multi-vcpkg'
+          buildPreset: 'ninja-multi-vcpkg-release'
