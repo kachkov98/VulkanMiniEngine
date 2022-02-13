@@ -2,6 +2,19 @@
   "name": "vulkan-mini-engine",
   "version-string": "latest",
   "dependencies": [
-    "cxxopts"
+    "cxxopts",
+    "glfw3",
+    "gli",
+    "glm",
+    "glslang",
+    "imgui",
+    "imguizmo",
+    "nlohmann-json",
+    "spdlog",
+    "spirv-reflect",
+    "stb",
+    "tinygltf",
+    "vulkan-headers",
+    "vulkan-memory-allocator"
   ]
 }
