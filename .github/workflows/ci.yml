@@ -11,6 +11,12 @@ jobs:
         os: [ubuntu-latest, windows-latest]
 
     steps:
+      - name: Install missing dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev
+        if: runner.os == 'Linux'
+
       - name: Install Vulkan SDK
         uses: humbletim/setup-vulkan-sdk@v1.0.3
 
