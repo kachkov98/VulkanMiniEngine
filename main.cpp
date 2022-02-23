@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
   glfwInit();
   try {
     auto window = std::make_unique<wsi::Window>("VulkanMiniEngine");
-    auto context = std::make_unique<gfx::Context>(window->getHandle());
+    auto context = std::make_unique<gfx::Context>(window.get());
     while (!window->shouldClose())
       glfwPollEvents();
   } catch (const std::exception &e) {

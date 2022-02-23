@@ -1,11 +1,10 @@
-﻿cmake_minimum_required (VERSION 3.8)
+﻿cmake_minimum_required (VERSION 3.21)
 project("VulkanMiniEngine")
 
 find_package(cxxopts CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(gli CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
-find_package(glslang CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(imguizmo CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
@@ -13,8 +12,15 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
 
-add_executable(VulkanMiniEngine "main.cpp" "renderer/window.cpp" "renderer/context.cpp" "renderer/allocator.cpp")
-target_compile_features(VulkanMiniEngine PRIVATE cxx_std_17)
+add_executable(VulkanMiniEngine
+  "main.cpp"
+  "renderer/window.cpp"
+  "renderer/context.cpp"
+  "renderer/allocator.cpp"
+  "renderer/descriptors.cpp"
+  "renderer/framegraph.cpp")
+
+target_compile_features(VulkanMiniEngine PRIVATE cxx_std_20)
 
 target_compile_definitions(VulkanMiniEngine
   PRIVATE

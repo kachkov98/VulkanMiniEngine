@@ -1,65 +1,53 @@
 #define VMA_IMPLEMENTATION
 #include "allocator.hpp"
 
-#define VMA_CHECK(func, message)                                                                   \
+#define VMA_CHECK(func, ...)                                                                       \
   do {                                                                                             \
-    VkResult result = (func);                                                                      \
+    VkResult result = func(__VA_ARGS__);                                                           \
     if (result)                                                                                    \
-      vk::throwResultException(static_cast<vk::Result>(result), message);                          \
+      vk::throwResultException(static_cast<vk::Result>(result), #func);                            \
   } while (0)
 
 namespace vma {
-#if 0
-void UniqueAllocation::bindBufferMemory(vk::Buffer buffer) {
-  getOwner().bindBufferMemory(get(), buffer);
-}
-
-void UniqueAllocation::bindImageMemory(vk::Image image) {
-  getOwner().bindImageMemory(get(), image);
-}
-
-void *UniqueAllocation::mapMemory() { return getOwner().mapMemory(get()); };
-
-void UniqueAllocation::unmapMemory() noexcept { getOwner().unmapMemory(get()); };
-#endif
-Allocator createAllocator(const AllocatorCreateInfo &createInfo) {
+Allocator createAllocator(const AllocatorCreateInfo &create_info) {
   VmaAllocator allocator;
-  VMA_CHECK(vmaCreateAllocator(&createInfo, &allocator), "vmaCreateAllocator");
+  VMA_CHECK(vmaCreateAllocator, &create_info, &allocator);
   return allocator;
 }
 
-UniqueAllocator createAllocatorUnique(const AllocatorCreateInfo &createInfo) {
-  return UniqueAllocator(createAllocator(createInfo), ObjectDestroy<NoParent>());
+UniqueAllocator createAllocatorUnique(const AllocatorCreateInfo &create_info) {
+  return UniqueAllocator(createAllocator(create_info), ObjectDestroy<NoParent>());
 }
 
 void Allocator::destroy() noexcept { vmaDestroyAllocator(*this); }
 
-Allocation Allocator::createAllocation(const vk::MemoryRequirements &memoryRequirements,
-                                       const AllocationCreateInfo &allocInfo) {
+Allocation Allocator::createAllocation(const vk::MemoryRequirements &memory_requirements,
+                                       const AllocationCreateInfo &alloc_info) {
   VmaAllocation allocation;
-  VMA_CHECK(vmaAllocateMemory(*this, &static_cast<VkMemoryRequirements>(memoryRequirements),
-                              &allocInfo, &allocation, nullptr),
-            "vmaAllocateMemory");
+  VMA_CHECK(vmaAllocateMemory, *this,
+            reinterpret_cast<const VkMemoryRequirements *>(&memory_requirements), &alloc_info,
+            &allocation, nullptr);
   return allocation;
 }
 
-UniqueAllocation Allocator::createAllocationUnique(const vk::MemoryRequirements &memoryRequirements,
-                                                   const AllocationCreateInfo &allocInfo) {
-  return UniqueAllocation(createAllocation(memoryRequirements, allocInfo),
+UniqueAllocation
+Allocator::createAllocationUnique(const vk::MemoryRequirements &memory_requirements,
+                                  const AllocationCreateInfo &alloc_info) {
+  return UniqueAllocation(createAllocation(memory_requirements, alloc_info),
                           ObjectDestroy<Allocator>(*this));
 }
 
 void Allocator::bindBufferMemory(Allocation allocation, vk::Buffer buffer) {
-  VMA_CHECK(vmaBindBufferMemory(*this, allocation, buffer), "vmaBindBufferMemory");
+  VMA_CHECK(vmaBindBufferMemory, *this, allocation, buffer);
 }
 
 void Allocator::bindImageMemory(Allocation allocation, vk::Image image) {
-  VMA_CHECK(vmaBindImageMemory(*this, allocation, image), "vmaBindImageMemory");
+  VMA_CHECK(vmaBindImageMemory, *this, allocation, image);
 }
 
 void *Allocator::mapMemory(Allocation allocation) {
   void *memory;
-  VMA_CHECK(vmaMapMemory(*this, allocation, &memory), "vmaMapMemory");
+  VMA_CHECK(vmaMapMemory, *this, allocation, &memory);
   return memory;
 }
 
@@ -67,49 +55,48 @@ void Allocator::unmapMemory(Allocation allocation) noexcept { vmaUnmapMemory(*th
 
 void Allocator::destroy(Allocation allocation) noexcept { vmaFreeMemory(*this, allocation); };
 
-Buffer Allocator::createBuffer(vk::BufferCreateInfo &bufferInfo, AllocationCreateInfo &allocInfo) {
+Buffer Allocator::createBuffer(vk::BufferCreateInfo &buffer_info,
+                               AllocationCreateInfo &alloc_info) {
   VkBuffer buffer;
   VmaAllocation allocation;
-  VMA_CHECK(vmaCreateBuffer(*this, &static_cast<VkBufferCreateInfo>(bufferInfo), &allocInfo,
-                            &buffer, &allocation, nullptr),
-            "vmaCreateBuffer");
+  VMA_CHECK(vmaCreateBuffer, *this, reinterpret_cast<const VkBufferCreateInfo *>(&buffer_info),
+            &alloc_info, &buffer, &allocation, nullptr);
   return Buffer(buffer, allocation);
 }
-UniqueBuffer Allocator::createBufferUnique(vk::BufferCreateInfo &bufferInfo,
-                                           AllocationCreateInfo &allocInfo) {
-  return UniqueBuffer(createBuffer(bufferInfo, allocInfo), ObjectDestroy<Allocator>(*this));
+UniqueBuffer Allocator::createBufferUnique(vk::BufferCreateInfo &buffer_info,
+                                           AllocationCreateInfo &alloc_info) {
+  return UniqueBuffer(createBuffer(buffer_info, alloc_info), ObjectDestroy<Allocator>(*this));
 }
 
 void Allocator::destroy(Buffer buffer) noexcept {
   vmaDestroyBuffer(*this, buffer.getBuffer(), buffer.getAllocation());
 }
 
-Image Allocator::createImage(vk::ImageCreateInfo &imageInfo, AllocationCreateInfo &allocInfo) {
+Image Allocator::createImage(vk::ImageCreateInfo &image_info, AllocationCreateInfo &alloc_info) {
   VkImage image;
   VmaAllocation allocation;
-  VMA_CHECK(vmaCreateImage(*this, &static_cast<VkImageCreateInfo>(imageInfo), &allocInfo, &image,
-                           &allocation, nullptr),
-            "vmaCreateImage");
+  VMA_CHECK(vmaCreateImage, *this, reinterpret_cast<const VkImageCreateInfo *>(&image_info),
+            &alloc_info, &image, &allocation, nullptr);
   return Image(image, allocation);
 }
 
-UniqueImage Allocator::createImageUnique(vk::ImageCreateInfo &imageInfo,
-                                         AllocationCreateInfo &allocInfo) {
-  return UniqueImage(createImage(imageInfo, allocInfo), ObjectDestroy<Allocator>(*this));
+UniqueImage Allocator::createImageUnique(vk::ImageCreateInfo &image_info,
+                                         AllocationCreateInfo &alloc_info) {
+  return UniqueImage(createImage(image_info, alloc_info), ObjectDestroy<Allocator>(*this));
 }
 
 void Allocator::destroy(Image image) noexcept {
   vmaDestroyImage(*this, image.getImage(), image.getAllocation());
 }
 
-Pool Allocator::createPool(const PoolCreateInfo &poolInfo) {
+Pool Allocator::createPool(const PoolCreateInfo &pool_info) {
   VmaPool pool;
-  VMA_CHECK(vmaCreatePool(*this, &poolInfo, &pool), "vmaCreatePool");
+  VMA_CHECK(vmaCreatePool, *this, &pool_info, &pool);
   return pool;
 }
 
-UniquePool Allocator::createPoolUnique(const PoolCreateInfo &poolInfo) {
-  return UniquePool(createPool(poolInfo), ObjectDestroy<Allocator>(*this));
+UniquePool Allocator::createPoolUnique(const PoolCreateInfo &pool_info) {
+  return UniquePool(createPool(pool_info), ObjectDestroy<Allocator>(*this));
 }
 
 void Allocator::destroy(Pool pool) noexcept { vmaDestroyPool(*this, pool); };

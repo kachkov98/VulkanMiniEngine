@@ -8,7 +8,7 @@
 struct GLFWwindow;
 
 namespace wsi {
-class Window {
+class Window final {
 public:
   Window() : window_(nullptr){};
   Window(const std::string &title, bool fullscreen = false);

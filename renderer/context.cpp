@@ -29,28 +29,29 @@ static std::vector<const char *> getValidationLayers() {
 }
 
 #ifndef NDEBUG
+static spdlog::level::level_enum getLogLevel(VkDebugUtilsMessageSeverityFlagBitsEXT level) {
+  switch (level) {
+  case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+    return spdlog::level::err;
+  case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+    return spdlog::level::warn;
+  case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+    return spdlog::level::info;
+  default:
+    return spdlog::level::off;
+  }
+}
+
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
               VkDebugUtilsMessageTypeFlagsEXT messageTypes,
               const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData) {
-  auto getLogLevel = [](VkDebugUtilsMessageSeverityFlagBitsEXT level) {
-    switch (level) {
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-      return spdlog::level::err;
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-      return spdlog::level::warn;
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-      return spdlog::level::info;
-    default:
-      return spdlog::level::off;
-    }
-  };
   spdlog::log(getLogLevel(messageSeverity), "[vulkan] {}", pCallbackData->pMessage);
   return VK_FALSE;
 }
 #endif
 
-Context::Context(GLFWwindow *window) {
+Context::Context(const wsi::Window *window) : window_(window) {
   // Create instance
   {
     VULKAN_HPP_DEFAULT_DISPATCHER.init(glfwGetInstanceProcAddress);
@@ -76,7 +77,7 @@ Context::Context(GLFWwindow *window) {
   // Create surface
   {
     VkSurfaceKHR surface;
-    if (glfwCreateWindowSurface(*instance_, window, nullptr, &surface) != VK_SUCCESS)
+    if (glfwCreateWindowSurface(*instance_, window_->getHandle(), nullptr, &surface) != VK_SUCCESS)
       throw std::runtime_error("glfwCreateWindowSurface failed");
     surface_ = vk::UniqueSurfaceKHR(surface, *instance_);
   }
@@ -97,58 +98,60 @@ Context::Context(GLFWwindow *window) {
       if ((queue_family_properties[i].queueFlags &
            (vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics)) &&
           physical_device_.getSurfaceSupportKHR(i, *surface_)) {
-        queue_family_index_ = i;
+        main_queue_family_index_ = i;
         break;
       }
-    if (queue_family_index_ == -1)
+    if (main_queue_family_index_ == -1)
       throw std::runtime_error("No device queue with compute, graphics and present support");
     std::array<float, 1> queue_priorities{1.0f};
-    vk::DeviceQueueCreateInfo queue_create_info{{}, queue_family_index_, queue_priorities};
+    vk::DeviceQueueCreateInfo queue_create_info{{}, main_queue_family_index_, queue_priorities};
     auto extensions = getDeviceExtensions();
     device_ = physical_device_.createDeviceUnique({{}, queue_create_info, {}, extensions});
     VULKAN_HPP_DEFAULT_DISPATCHER.init(*device_);
-    queue_ = device_->getQueue(queue_family_index_, 0);
   }
   // Create swapchain
-  {}
-  // Create command pool
-  command_pool_ = device_->createCommandPoolUnique({{}, queue_family_index_});
+  {
+    vk::SurfaceCapabilitiesKHR capabilities = physical_device_.getSurfaceCapabilitiesKHR(*surface_);
+    std::vector<vk::SurfaceFormatKHR> formats = physical_device_.getSurfaceFormatsKHR(*surface_);
+    std::vector<vk::PresentModeKHR> present_modes =
+        physical_device_.getSurfacePresentModesKHR(*surface_);
+    //swapchain_ = device_->createSwapchainKHRUnique({{}, *surface_, });
+  }
   // Create allocator
   {
-    VmaVulkanFunctions vulkan_functions{};
-#define INIT_VK_FUNC(name) vulkan_functions.##name = VULKAN_HPP_DEFAULT_DISPATCHER.##name
-    INIT_VK_FUNC(vkGetPhysicalDeviceProperties);
-    INIT_VK_FUNC(vkGetPhysicalDeviceMemoryProperties);
-    INIT_VK_FUNC(vkAllocateMemory);
-    INIT_VK_FUNC(vkFreeMemory);
-    INIT_VK_FUNC(vkMapMemory);
-    INIT_VK_FUNC(vkUnmapMemory);
-    INIT_VK_FUNC(vkFlushMappedMemoryRanges);
-    INIT_VK_FUNC(vkInvalidateMappedMemoryRanges);
-    INIT_VK_FUNC(vkBindBufferMemory);
-    INIT_VK_FUNC(vkBindImageMemory);
-    INIT_VK_FUNC(vkGetBufferMemoryRequirements);
-    INIT_VK_FUNC(vkGetImageMemoryRequirements);
-    INIT_VK_FUNC(vkCreateBuffer);
-    INIT_VK_FUNC(vkDestroyBuffer);
-    INIT_VK_FUNC(vkCreateImage);
-    INIT_VK_FUNC(vkDestroyImage);
-    INIT_VK_FUNC(vkCmdCopyBuffer);
-#undef INIT_VK_FUNC
-    vulkan_functions.vkGetBufferMemoryRequirements2KHR =
-        VULKAN_HPP_DEFAULT_DISPATCHER.vkGetBufferMemoryRequirements2;
-    vulkan_functions.vkGetImageMemoryRequirements2KHR =
-        VULKAN_HPP_DEFAULT_DISPATCHER.vkGetImageMemoryRequirements2;
-    vulkan_functions.vkBindBufferMemory2KHR = VULKAN_HPP_DEFAULT_DISPATCHER.vkBindBufferMemory2;
-    vulkan_functions.vkBindImageMemory2KHR = VULKAN_HPP_DEFAULT_DISPATCHER.vkBindImageMemory2;
-    vulkan_functions.vkGetPhysicalDeviceMemoryProperties2KHR =
-        VULKAN_HPP_DEFAULT_DISPATCHER.vkGetPhysicalDeviceMemoryProperties2;
+    const auto &dispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
+    VmaVulkanFunctions vma_vk_funcs{};
+    vma_vk_funcs.vkGetPhysicalDeviceProperties = dispatcher.vkGetPhysicalDeviceProperties;
+    vma_vk_funcs.vkGetPhysicalDeviceMemoryProperties = 
+        dispatcher.vkGetPhysicalDeviceMemoryProperties;
+    vma_vk_funcs.vkGetPhysicalDeviceMemoryProperties2KHR =
+        dispatcher.vkGetPhysicalDeviceMemoryProperties2;
+    vma_vk_funcs.vkAllocateMemory = dispatcher.vkAllocateMemory;
+    vma_vk_funcs.vkFreeMemory = dispatcher.vkFreeMemory;
+    vma_vk_funcs.vkMapMemory = dispatcher.vkMapMemory;
+    vma_vk_funcs.vkUnmapMemory = dispatcher.vkUnmapMemory;
+    vma_vk_funcs.vkFlushMappedMemoryRanges = dispatcher.vkFlushMappedMemoryRanges;
+    vma_vk_funcs.vkInvalidateMappedMemoryRanges = dispatcher.vkInvalidateMappedMemoryRanges;
+    vma_vk_funcs.vkBindBufferMemory = dispatcher.vkBindBufferMemory;
+    vma_vk_funcs.vkBindBufferMemory2KHR = dispatcher.vkBindBufferMemory2;
+    vma_vk_funcs.vkBindImageMemory = dispatcher.vkBindImageMemory;
+    vma_vk_funcs.vkBindImageMemory2KHR = dispatcher.vkBindImageMemory2;
+    vma_vk_funcs.vkGetBufferMemoryRequirements = dispatcher.vkGetBufferMemoryRequirements;
+    vma_vk_funcs.vkGetBufferMemoryRequirements2KHR = dispatcher.vkGetBufferMemoryRequirements2;
+    vma_vk_funcs.vkGetImageMemoryRequirements = dispatcher.vkGetImageMemoryRequirements;
+    vma_vk_funcs.vkGetImageMemoryRequirements2KHR = dispatcher.vkGetImageMemoryRequirements2;
+    vma_vk_funcs.vkCreateBuffer = dispatcher.vkCreateBuffer;
+    vma_vk_funcs.vkDestroyBuffer = dispatcher.vkDestroyBuffer;
+    vma_vk_funcs.vkCreateImage = dispatcher.vkCreateImage;
+    vma_vk_funcs.vkDestroyImage = dispatcher.vkDestroyImage;
+    vma_vk_funcs.vkCmdCopyBuffer = dispatcher.vkCmdCopyBuffer;
+
     vma::AllocatorCreateInfo create_info{};
     create_info.vulkanApiVersion = VK_API_VERSION_1_2;
     create_info.physicalDevice = physical_device_;
     create_info.device = *device_;
     create_info.instance = *instance_;
-    create_info.pVulkanFunctions = &vulkan_functions;
+    create_info.pVulkanFunctions = &vma_vk_funcs;
     allocator_ = vma::createAllocatorUnique(create_info);
   }
 }

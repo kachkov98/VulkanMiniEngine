@@ -32,7 +32,7 @@ protected:
 template <typename Type, typename OwnerType = NoParent>
 class UniqueHandle : public ObjectDestroy<OwnerType> {
 private:
-  using Deleter = typename ObjectDestroy<OwnerType>;
+  using Deleter = ObjectDestroy<OwnerType>;
 
 public:
   UniqueHandle() = default;
@@ -111,16 +111,7 @@ public:
 private:
   VmaAllocation allocation_ = {};
 };
-#if 0
-class UniqueAllocation : public UniqueHandle<Allocation, Allocator> {
-public:
-  using UniqueHandle::UniqueHandle;
-  void bindBufferMemory(vk::Buffer buffer);
-  void bindImageMemory(vk::Image image);
-  void *mapMemory();
-  void unmapMemory() noexcept;
-};
-#endif
+
 using UniqueAllocation = UniqueHandle<Allocation, Allocator>;
 
 // Wrapper for buffer with allocated memory
@@ -228,27 +219,27 @@ public:
   explicit operator bool() const noexcept { return allocator_ != VK_NULL_HANDLE; }
   bool operator!() const noexcept { return allocator_ == VK_NULL_HANDLE; }
 
-  Allocation createAllocation(const vk::MemoryRequirements &memoryRequirements,
-                              const AllocationCreateInfo &allocInfo);
-  UniqueAllocation createAllocationUnique(const vk::MemoryRequirements &memoryRequirements,
-                                          const AllocationCreateInfo &allocInfo);
+  Allocation createAllocation(const vk::MemoryRequirements &memory_requirements,
+                              const AllocationCreateInfo &alloc_info);
+  UniqueAllocation createAllocationUnique(const vk::MemoryRequirements &memory_requirements,
+                                          const AllocationCreateInfo &alloc_info);
   void bindBufferMemory(Allocation allocation, vk::Buffer buffer);
   void bindImageMemory(Allocation allocation, vk::Image image);
   void *mapMemory(Allocation allocation);
   void unmapMemory(Allocation allocation) noexcept;
   void destroy(Allocation allocation) noexcept;
 
-  Buffer createBuffer(vk::BufferCreateInfo &bufferInfo, AllocationCreateInfo &allocInfo);
-  UniqueBuffer createBufferUnique(vk::BufferCreateInfo &bufferInfo,
-                                  AllocationCreateInfo &allocInfo);
+  Buffer createBuffer(vk::BufferCreateInfo &buffer_info, AllocationCreateInfo &alloc_info);
+  UniqueBuffer createBufferUnique(vk::BufferCreateInfo &buffer_info,
+                                  AllocationCreateInfo &alloc_info);
   void destroy(Buffer buffer) noexcept;
 
-  Image createImage(vk::ImageCreateInfo &imageInfo, AllocationCreateInfo &allocInfo);
-  UniqueImage createImageUnique(vk::ImageCreateInfo &imageInfo, AllocationCreateInfo &allocInfo);
+  Image createImage(vk::ImageCreateInfo &image_info, AllocationCreateInfo &alloc_info);
+  UniqueImage createImageUnique(vk::ImageCreateInfo &image_info, AllocationCreateInfo &alloc_info);
   void destroy(Image image) noexcept;
 
-  Pool createPool(const PoolCreateInfo &poolInfo);
-  UniquePool createPoolUnique(const PoolCreateInfo &poolInfo);
+  Pool createPool(const PoolCreateInfo &pool_info);
+  UniquePool createPoolUnique(const PoolCreateInfo &pool_info);
   void destroy(Pool pool) noexcept;
 
   void destroy() noexcept;
@@ -259,8 +250,8 @@ private:
 
 using UniqueAllocator = UniqueHandle<Allocator>;
 
-Allocator createAllocator(const AllocatorCreateInfo &createInfo);
-UniqueAllocator createAllocatorUnique(const AllocatorCreateInfo &createInfo);
+Allocator createAllocator(const AllocatorCreateInfo &create_info);
+UniqueAllocator createAllocatorUnique(const AllocatorCreateInfo &create_info);
 
 } // namespace vma
 
