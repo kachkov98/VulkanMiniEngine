@@ -13,6 +13,8 @@ find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 
+add_subdirectory(shaders)
+
 add_executable(VulkanMiniEngine
   "main.cpp"
   "renderer/window.cpp"
@@ -20,6 +22,8 @@ add_executable(VulkanMiniEngine
   "renderer/allocator.cpp"
   "renderer/descriptors.cpp"
   "renderer/framegraph.cpp")
+
+add_dependencies(VulkanMiniEngine Shaders)
 
 target_compile_features(VulkanMiniEngine PRIVATE cxx_std_20)
 
