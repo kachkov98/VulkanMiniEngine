@@ -3,18 +3,20 @@
   "version-string": "latest",
   "dependencies": [
     "cxxopts",
+    "entt",
     "glfw3",
     "gli",
     "glm",
     "imgui",
     "imguizmo",
     "nlohmann-json",
-    "shaderc",
     "spdlog",
     "spirv-reflect",
     "stb",
+    "taskflow",
     "tinygltf",
-    "vulkan-headers",
+    "tracy",
+    "vulkan",
     "vulkan-memory-allocator"
   ]
 }

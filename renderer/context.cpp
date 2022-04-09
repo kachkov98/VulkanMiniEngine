@@ -16,8 +16,7 @@ static std::vector<const char *> getInstanceExtensions() {
 }
 
 static std::vector<const char *> getDeviceExtensions() {
-  return {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-          VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME};
+  return {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 }
 
 static std::vector<const char *> getValidationLayers() {
@@ -56,7 +55,7 @@ Context::Context(const wsi::Window *window) : window_(window) {
   {
     VULKAN_HPP_DEFAULT_DISPATCHER.init(glfwGetInstanceProcAddress);
     vk::ApplicationInfo app_info{"VulkanMiniEngine", VK_MAKE_VERSION(0, 0, 1), "VulkanMiniEngine",
-                                 VK_MAKE_VERSION(0, 0, 1), VK_API_VERSION_1_2};
+                                 VK_MAKE_VERSION(0, 0, 1), VK_API_VERSION_1_3};
     auto layers = getValidationLayers();
     auto extensions = getInstanceExtensions();
     instance_ = vk::createInstanceUnique({{}, &app_info, layers, extensions});
@@ -119,32 +118,9 @@ Context::Context(const wsi::Window *window) : window_(window) {
   }
   // Create allocator
   {
-    const auto &dispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
     VmaVulkanFunctions vma_vk_funcs{};
-    vma_vk_funcs.vkGetPhysicalDeviceProperties = dispatcher.vkGetPhysicalDeviceProperties;
-    vma_vk_funcs.vkGetPhysicalDeviceMemoryProperties = 
-        dispatcher.vkGetPhysicalDeviceMemoryProperties;
-    vma_vk_funcs.vkGetPhysicalDeviceMemoryProperties2KHR =
-        dispatcher.vkGetPhysicalDeviceMemoryProperties2;
-    vma_vk_funcs.vkAllocateMemory = dispatcher.vkAllocateMemory;
-    vma_vk_funcs.vkFreeMemory = dispatcher.vkFreeMemory;
-    vma_vk_funcs.vkMapMemory = dispatcher.vkMapMemory;
-    vma_vk_funcs.vkUnmapMemory = dispatcher.vkUnmapMemory;
-    vma_vk_funcs.vkFlushMappedMemoryRanges = dispatcher.vkFlushMappedMemoryRanges;
-    vma_vk_funcs.vkInvalidateMappedMemoryRanges = dispatcher.vkInvalidateMappedMemoryRanges;
-    vma_vk_funcs.vkBindBufferMemory = dispatcher.vkBindBufferMemory;
-    vma_vk_funcs.vkBindBufferMemory2KHR = dispatcher.vkBindBufferMemory2;
-    vma_vk_funcs.vkBindImageMemory = dispatcher.vkBindImageMemory;
-    vma_vk_funcs.vkBindImageMemory2KHR = dispatcher.vkBindImageMemory2;
-    vma_vk_funcs.vkGetBufferMemoryRequirements = dispatcher.vkGetBufferMemoryRequirements;
-    vma_vk_funcs.vkGetBufferMemoryRequirements2KHR = dispatcher.vkGetBufferMemoryRequirements2;
-    vma_vk_funcs.vkGetImageMemoryRequirements = dispatcher.vkGetImageMemoryRequirements;
-    vma_vk_funcs.vkGetImageMemoryRequirements2KHR = dispatcher.vkGetImageMemoryRequirements2;
-    vma_vk_funcs.vkCreateBuffer = dispatcher.vkCreateBuffer;
-    vma_vk_funcs.vkDestroyBuffer = dispatcher.vkDestroyBuffer;
-    vma_vk_funcs.vkCreateImage = dispatcher.vkCreateImage;
-    vma_vk_funcs.vkDestroyImage = dispatcher.vkDestroyImage;
-    vma_vk_funcs.vkCmdCopyBuffer = dispatcher.vkCmdCopyBuffer;
+    vma_vk_funcs.vkGetInstanceProcAddr = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetInstanceProcAddr;
+    vma_vk_funcs.vkGetDeviceProcAddr = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetDeviceProcAddr;
 
     vma::AllocatorCreateInfo create_info{};
     create_info.vulkanApiVersion = VK_API_VERSION_1_2;
