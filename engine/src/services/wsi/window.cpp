@@ -1,6 +1,7 @@
-#include "window.hpp"
+#include "services/wsi/window.hpp"
 #include <GLFW/glfw3.h>
 #include <stdexcept>
+#include <tuple>
 
 namespace wsi {
 static std::tuple<GLFWmonitor *, glm::ivec2, glm::uvec2> getWindowParams(bool fullscreen) noexcept {

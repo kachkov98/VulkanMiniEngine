@@ -5,9 +5,9 @@ foreach(GLSL ${GLSL_SOURCE_FILES})
   set(SPIRV "${CMAKE_CURRENT_BINARY_DIR}/${FILE_NAME}.spv")
   add_custom_command(
     OUTPUT ${SPIRV}
-    COMMAND ${Vulkan_GLSLC_EXECUTABLE} ${GLSL} -o ${SPIRV}
+    COMMAND ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE} -V ${GLSL} -o ${SPIRV}
     DEPENDS ${GLSL})
   list(APPEND SPIRV_BINARIES ${SPIRV})
 endforeach(GLSL)
 
-add_custom_target(Shaders DEPENDS ${SPIRV_BINARIES})
+add_custom_target(shaders DEPENDS ${SPIRV_BINARIES})

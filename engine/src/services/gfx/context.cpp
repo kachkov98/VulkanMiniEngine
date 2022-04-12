@@ -1,4 +1,5 @@
-#include "context.hpp"
+#include "services/gfx/context.hpp"
+#include "services/wsi/window.hpp"
 #include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
 
@@ -50,7 +51,7 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 }
 #endif
 
-Context::Context(const wsi::Window *window) : window_(window) {
+Context::Context(const wsi::Window &window) : window_(&window) {
   // Create instance
   {
     VULKAN_HPP_DEFAULT_DISPATCHER.init(glfwGetInstanceProcAddress);

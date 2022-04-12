@@ -3,8 +3,11 @@
 
 #include "allocator.hpp"
 #include "descriptors.hpp"
-#include "window.hpp"
 #include <vulkan/vulkan.hpp>
+
+namespace wsi {
+class Window;
+}
 
 namespace gfx {
 
@@ -29,7 +32,7 @@ class Context final {
 public:
   static constexpr unsigned frames_in_flight = 2;
 
-  Context(const wsi::Window *window);
+  Context(const wsi::Window &window);
   vk::SurfaceKHR getSurface() const noexcept { return *surface_; }
   vk::PhysicalDevice getPhysicalDevice() const noexcept { return physical_device_; }
   vk::Device getDevice() const noexcept { return *device_; }

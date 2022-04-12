@@ -1,14 +1,15 @@
-#ifndef FRAMEGRAPH_HPP
-#define FRAMEGRAPH_HPP
+#ifndef RENDER_GRAPH_HPP
+#define RENDER_GRAPH_HPP
 
-#include "allocator.hpp"
+#include "services/gfx/allocator.hpp"
+
 #include <functional>
 #include <iosfwd>
 #include <memory>
 #include <string>
 #include <vector>
 
-namespace fg {
+namespace rg {
 class Node {
 public:
   Node(const Node &) = delete;
@@ -66,19 +67,17 @@ template <typename Descriptor> class Resource final : public ResourceNode {};
 
 class PassBuilder;
 
-class FrameGraph final {
+class RenderGraph final {
 public:
-  FrameGraph() = default;
-  FrameGraph(const FrameGraph &) = delete;
-  FrameGraph(FrameGraph &&) noexcept = default;
-  FrameGraph &operator=(const FrameGraph &) = delete;
-  FrameGraph &operator=(FrameGraph &&) noexcept = default;
+  RenderGraph() = default;
+  RenderGraph(const RenderGraph &) = delete;
+  RenderGraph(RenderGraph &&) noexcept = default;
+  RenderGraph &operator=(const RenderGraph &) = delete;
+  RenderGraph &operator=(RenderGraph &&) noexcept = default;
 
-  template<typename Data>
-  void addPass(const std::string &name, vk::PipelineStageFlags);
+  template <typename Data> void addPass(const std::string &name, vk::PipelineStageFlags);
 
-  template<typename Descriptor>
-  void addResource(const std::string &name);
+  template <typename Descriptor> void addResource(const std::string &name);
 
   void compile();
   void execute(vk::CommandBuffer command_buffer);
@@ -92,18 +91,18 @@ private:
   std::vector<vma::UniqueAllocation> tranisent_allocations_;
 };
 
-std::ostream &operator<<(std::ostream &os, const FrameGraph &fg);
+std::ostream &operator<<(std::ostream &os, const RenderGraph &rg);
 
 class PassBuilder final {
 public:
-  PassBuilder(FrameGraph &frame_graph, PassNode &pass_node)
-      : frame_graph_(&frame_graph), pass_node_(&pass_node) {}
+  PassBuilder(RenderGraph &render_graph, PassNode &pass_node)
+      : render_graph_(&render_graph), pass_node_(&pass_node) {}
 
 private:
-  FrameGraph *frame_graph_;
+  RenderGraph *render_graph_;
   PassNode *pass_node_;
 };
 
-} // namespace fg
+} // namespace rg
 
 #endif

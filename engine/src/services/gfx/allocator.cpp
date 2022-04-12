@@ -1,5 +1,5 @@
 #define VMA_IMPLEMENTATION
-#include "allocator.hpp"
+#include "services/gfx/allocator.hpp"
 
 #define VMA_CHECK(func, ...)                                                                       \
   do {                                                                                             \

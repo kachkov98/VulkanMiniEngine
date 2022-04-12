@@ -1,8 +1,7 @@
-#include "descriptors.hpp"
-#include <array>
+#include "services/gfx/descriptors.hpp"
 
 namespace gfx {
-static constexpr std::array descriptor_sizes = std::to_array<std::pair<vk::DescriptorType, float>>(
+static constexpr std::pair<vk::DescriptorType, float> descriptor_sizes[] =
     {{vk::DescriptorType::eSampler, 0.5f},
      {vk::DescriptorType::eCombinedImageSampler, 4.f},
      {vk::DescriptorType::eSampledImage, 4.f},
@@ -13,14 +12,14 @@ static constexpr std::array descriptor_sizes = std::to_array<std::pair<vk::Descr
      {vk::DescriptorType::eStorageBuffer, 2.f},
      {vk::DescriptorType::eUniformBufferDynamic, 1.f},
      {vk::DescriptorType::eStorageBufferDynamic, 1.f},
-     {vk::DescriptorType::eInputAttachment, 0.5f}});
+     {vk::DescriptorType::eInputAttachment, 0.5f}};
 
 vk::DescriptorPool DescriptorAllocator::getPool(unsigned size) {
   if (free_pools_.empty()) {
     std::vector<vk::DescriptorPoolSize> pool_sizes;
-    pool_sizes.reserve(descriptor_sizes.size());
+    pool_sizes.reserve(std::size(descriptor_sizes));
     for (const auto &desc : descriptor_sizes)
-      pool_sizes.emplace_back(desc.first, size * desc.second);
+      pool_sizes.emplace_back(desc.first, static_cast<uint32_t>(size * desc.second));
     used_pools_.push_back(device_.createDescriptorPoolUnique({{}, size, pool_sizes}));
   } else {
     auto pool = std::move(free_pools_.back());

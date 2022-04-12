@@ -3,7 +3,6 @@
 
 #include <glm/vec2.hpp>
 #include <string>
-#include <tuple>
 
 struct GLFWwindow;
 
