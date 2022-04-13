@@ -42,6 +42,7 @@ void Engine::init() {
 
 void Engine::terminate() {
   spdlog::info("Engine termination started");
+  Context::ref().savePipelineCache();
   Context::reset();
   Input::reset();
   Window::reset();

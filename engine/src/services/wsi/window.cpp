@@ -6,14 +6,13 @@
 namespace wsi {
 static std::tuple<GLFWmonitor *, glm::ivec2, glm::uvec2> getWindowParams(bool fullscreen) noexcept {
   GLFWmonitor *monitor = glfwGetPrimaryMonitor();
-  int xpos = 0, ypos = 0, width, height;
   if (fullscreen) {
     const GLFWvidmode *mode = glfwGetVideoMode(monitor);
-    width = mode->width;
-    height = mode->height;
-  } else
-    glfwGetMonitorWorkarea(monitor, &xpos, &ypos, &width, &height);
-  return {fullscreen ? monitor : nullptr, glm::ivec2(xpos, ypos), glm::uvec2(width, height)};
+    return {monitor, glm::ivec2{}, glm::uvec2(mode->width, mode->height)};
+  }
+  int width, height;
+  glfwGetMonitorWorkarea(monitor, nullptr, nullptr, &width, &height);
+  return {nullptr, glm::ivec2{100, 100}, glm::vec2(width, height) * 0.75f};
 }
 
 Window::Window(const std::string &title, bool fullscreen) {

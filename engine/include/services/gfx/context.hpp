@@ -3,7 +3,10 @@
 
 #include "allocator.hpp"
 #include "descriptors.hpp"
+
 #include <vulkan/vulkan.hpp>
+
+#include <filesystem>
 
 namespace wsi {
 class Window;
@@ -11,7 +14,7 @@ class Window;
 
 namespace gfx {
 
-class Frame {
+class Frame final {
 public:
   Frame() = default;
   Frame(vk::Device device, uint32_t queue_family_index);
@@ -31,17 +34,29 @@ private:
 class Context final {
 public:
   static constexpr unsigned frames_in_flight = 2;
+  static const std::filesystem::path cache_path;
 
   Context(const wsi::Window &window);
-  vk::SurfaceKHR getSurface() const noexcept { return *surface_; }
+
   vk::PhysicalDevice getPhysicalDevice() const noexcept { return physical_device_; }
+
+  vk::SurfaceKHR getSurface() const noexcept { return *surface_; }
+  vk::SurfaceFormatKHR getSurfaceFormat() const noexcept { return surface_format_; }
+
   vk::Device getDevice() const noexcept { return *device_; }
   vk::Queue getMainQueue() const noexcept { return device_->getQueue(main_queue_family_index_, 0); }
   uint32_t getMainQueueFamilyIndex() const noexcept { return main_queue_family_index_; }
-  vk::SwapchainKHR getSwapchain() const noexcept { return *swapchain_; }
+
+  vk::Extent2D getSwapchainExtent() const noexcept { return swapchain_extent_; };
+  vk::Image acquireNextImage(vk::Semaphore image_available);
+  void presentImage(vk::Semaphore render_finished);
+
+  vk::PipelineCache getPipelineCache() const noexcept { return *pipeline_cache_; }
+  void savePipelineCache() const;
+
   vma::Allocator getAllocator() const noexcept { return *allocator_; }
 
-  Frame &getCurrentFrame() noexcept { return frames_[current_frame_]; }
+  Frame &getNextFrame() noexcept { return frames_[(++current_frame_) % frames_in_flight]; }
 
 private:
   const wsi::Window *window_ = nullptr;
@@ -49,15 +64,28 @@ private:
 #ifndef NDEBUG
   vk::UniqueDebugUtilsMessengerEXT messenger_ = {};
 #endif
-  vk::UniqueSurfaceKHR surface_ = {};
   vk::PhysicalDevice physical_device_ = {};
+
+  vk::UniqueSurfaceKHR surface_ = {};
+  vk::SurfaceFormatKHR surface_format_ = {};
+  vk::SurfaceCapabilitiesKHR surface_capabilities_ = {};
+
   vk::UniqueDevice device_ = {};
   uint32_t main_queue_family_index_ = -1u;
+
+  uint32_t current_swapchain_image_{0}, num_swapchain_images_{3};
+  vk::Extent2D swapchain_extent_ = {};
   vk::UniqueSwapchainKHR swapchain_ = {};
+  std::vector<vk::Image> swapchain_images_{};
+
+  vk::UniquePipelineCache pipeline_cache_ = {};
+
   vma::UniqueAllocator allocator_ = {};
 
   unsigned current_frame_ = 0;
   std::array<Frame, frames_in_flight> frames_;
+
+  void recreateSwapchain();
 };
 } // namespace gfx
 

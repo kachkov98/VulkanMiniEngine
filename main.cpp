@@ -8,7 +8,7 @@ int main(int argc, char *argv[]) {
   auto result = options.parse(argc, argv);
   try {
     vme::Engine::init();
-    while (vme::Engine::get<wsi::Window>().shouldClose())
+    while (!vme::Engine::get<wsi::Window>().shouldClose())
       vme::Engine::get<wsi::Input>().processEvents();
     vme::Engine::terminate();
   } catch (const std::exception &e) {
