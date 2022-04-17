@@ -6,8 +6,6 @@
 
 #include <vulkan/vulkan.hpp>
 
-#include <filesystem>
-
 namespace wsi {
 class Window;
 }
@@ -17,13 +15,20 @@ namespace gfx {
 class Frame final {
 public:
   Frame() = default;
-  Frame(vk::Device device, uint32_t queue_family_index);
+  Frame(vk::Device device, vma::Allocator allocator, uint32_t queue_family_index);
+
+  void submit(vk::Queue queue) const;
+  void reset() const;
+
+  vk::Semaphore getImageAvailableSemaphore() const noexcept { return *image_available_; }
+  vk::Semaphore getRenderFinishedSemaphore() const noexcept { return *render_finished_; }
   vk::CommandPool getCommandPool() const noexcept { return *command_pool_; }
   vk::CommandBuffer getCommandBuffer() const noexcept { return *command_buffer_; }
   vma::Pool getMemoryPool() const noexcept { return *memory_pool_; }
 
 private:
   vk::Device device_;
+  vma::Allocator allocator_;
   vk::UniqueSemaphore image_available_, render_finished_;
   vk::UniqueFence render_fence_;
   vk::UniqueCommandPool command_pool_;
@@ -34,7 +39,6 @@ private:
 class Context final {
 public:
   static constexpr unsigned frames_in_flight = 2;
-  static const std::filesystem::path cache_path;
 
   Context(const wsi::Window &window);
 
@@ -48,15 +52,18 @@ public:
   uint32_t getMainQueueFamilyIndex() const noexcept { return main_queue_family_index_; }
 
   vk::Extent2D getSwapchainExtent() const noexcept { return swapchain_extent_; };
-  vk::Image acquireNextImage(vk::Semaphore image_available);
+  vk::Image getCurrentImage() const noexcept { return swapchain_images_[current_swapchain_image_]; }
+  void acquireNextImage(vk::Semaphore image_available);
   void presentImage(vk::Semaphore render_finished);
+  void recreateSwapchain();
 
   vk::PipelineCache getPipelineCache() const noexcept { return *pipeline_cache_; }
   void savePipelineCache() const;
 
   vma::Allocator getAllocator() const noexcept { return *allocator_; }
 
-  Frame &getNextFrame() noexcept { return frames_[(++current_frame_) % frames_in_flight]; }
+  Frame &getCurrentFrame() noexcept { return frames_[current_frame_]; }
+  void nextFrame() noexcept { current_frame_ = (current_frame_ + 1) % frames_in_flight; }
 
 private:
   const wsi::Window *window_ = nullptr;
@@ -84,8 +91,6 @@ private:
 
   unsigned current_frame_ = 0;
   std::array<Frame, frames_in_flight> frames_;
-
-  void recreateSwapchain();
 };
 } // namespace gfx
 

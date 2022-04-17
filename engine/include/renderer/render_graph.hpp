@@ -1,13 +1,17 @@
 #ifndef RENDER_GRAPH_HPP
 #define RENDER_GRAPH_HPP
 
-#include "services/gfx/allocator.hpp"
+#include <vulkan/vulkan.hpp>
 
 #include <functional>
 #include <iosfwd>
 #include <memory>
 #include <string>
 #include <vector>
+
+namespace gfx {
+class Frame;
+}
 
 namespace rg {
 class Node {
@@ -80,18 +84,16 @@ public:
   template <typename Descriptor> void addResource(const std::string &name);
 
   void compile();
-  void execute(vk::CommandBuffer command_buffer);
+  void execute(gfx::Frame &frame);
 
-  void dump(std::ostream &os);
+  void dump(std::ostream &os) const;
 
 private:
   std::vector<std::unique_ptr<PassNode>> passes_;
   std::vector<std::unique_ptr<ResourceNode>> resources_;
-
-  std::vector<vma::UniqueAllocation> tranisent_allocations_;
 };
 
-std::ostream &operator<<(std::ostream &os, const RenderGraph &rg);
+std::ostream &operator<<(std::ostream &os, const RenderGraph &RG);
 
 class PassBuilder final {
 public:

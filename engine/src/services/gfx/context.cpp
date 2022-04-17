@@ -4,11 +4,16 @@
 #include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
 
+#include <filesystem>
 #include <fstream>
+#include <stdexcept>
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
 namespace gfx {
+static const std::filesystem::path cache_path =
+    std::filesystem::current_path() / "shader_cache.bin";
+
 static std::vector<const char *> getInstanceExtensions() {
   uint32_t count;
   const char **glfw_extensions = glfwGetRequiredInstanceExtensions(&count);
@@ -52,8 +57,33 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 }
 #endif
 
-const std::filesystem::path Context::cache_path =
-    std::filesystem::current_path() / "shader_cache.bin";
+Frame::Frame(vk::Device device, vma::Allocator allocator, uint32_t queue_family_index)
+    : device_(device), allocator_(allocator) {
+  image_available_ = device_.createSemaphoreUnique({});
+  render_finished_ = device_.createSemaphoreUnique({});
+  render_fence_ = device_.createFenceUnique({vk::FenceCreateFlagBits::eSignaled});
+  command_pool_ = device_.createCommandPoolUnique(
+      {vk::CommandPoolCreateFlagBits::eResetCommandBuffer, queue_family_index});
+  command_buffer_ = std::move(
+      device_.allocateCommandBuffersUnique({*command_pool_, vk::CommandBufferLevel::ePrimary, 1})
+          .front());
+  memory_pool_ = allocator_.createPoolUnique(
+      {/*memory type index*/ 0, VMA_POOL_CREATE_LINEAR_ALGORITHM_BIT, 0, 0, 0, 1.0f, 0, nullptr});
+}
+
+void Frame::submit(vk::Queue queue) const {
+  vk::PipelineStageFlags wait_stage_mask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+  vk::SubmitInfo submit_info{*image_available_, wait_stage_mask, *command_buffer_,
+                             *render_finished_};
+  queue.submit(submit_info, *render_fence_);
+}
+
+void Frame::reset() const {
+  if (device_.waitForFences({*render_fence_}, VK_TRUE, UINT64_MAX) == vk::Result::eTimeout)
+    throw std::runtime_error("Unexpected fence timeout");
+  device_.resetFences({*render_fence_});
+  command_buffer_->reset({});
+}
 
 Context::Context(const wsi::Window &window) : window_(&window) {
   // Create instance
@@ -122,14 +152,15 @@ Context::Context(const wsi::Window &window) : window_(&window) {
   }
   // Create swapchain
   {
-    num_swapchain_images_ = std::clamp(num_swapchain_images_, surface_capabilities_.minImageCount,
-                                       surface_capabilities_.maxImageCount);
+    num_swapchain_images_ = std::max(num_swapchain_images_, surface_capabilities_.minImageCount);
+    if (surface_capabilities_.maxImageCount)
+      num_swapchain_images_ = std::min(num_swapchain_images_, surface_capabilities_.maxImageCount);
     recreateSwapchain();
     swapchain_images_ = device_->getSwapchainImagesKHR(*swapchain_);
   }
   // Load pipeline cache
   {
-    spdlog::info("[gfx] Loading shader cache from disk");
+    spdlog::info("[gfx] Loading shader cache from {}", cache_path.native());
     std::ifstream f(cache_path, std::ios::in | std::ios::binary);
     std::vector<uint8_t> cache_data{std::istreambuf_iterator<char>(f),
                                     std::istreambuf_iterator<char>()};
@@ -150,16 +181,20 @@ Context::Context(const wsi::Window &window) : window_(&window) {
     create_info.pVulkanFunctions = &vma_vk_funcs;
     allocator_ = vma::createAllocatorUnique(create_info);
   }
+  // Create in-flight frames
+  {
+    for (unsigned i = 0; i < frames_in_flight; ++i)
+      frames_[i] = std::move(Frame(*device_, *allocator_, main_queue_family_index_));
+  }
 }
 
-vk::Image Context::acquireNextImage(vk::Semaphore image_available) {
+void Context::acquireNextImage(vk::Semaphore image_available) {
   auto result = device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, image_available, {},
                                              &current_swapchain_image_);
   if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR)
     recreateSwapchain();
   else if (result != vk::Result::eSuccess)
     throw std::runtime_error("Failed to acquire next image");
-  return swapchain_images_[current_swapchain_image_];
 }
 
 void Context::presentImage(vk::Semaphore render_finished) {
@@ -196,7 +231,7 @@ void Context::recreateSwapchain() {
 }
 
 void Context::savePipelineCache() const {
-  spdlog::info("[gfx] Saving shader cache on disk");
+  spdlog::info("[gfx] Saving shader cache to {}", cache_path.native());
   std::vector<uint8_t> data{device_->getPipelineCacheData(*pipeline_cache_)};
   std::ofstream f(cache_path, std::ios::out | std::ios::binary);
   std::copy(data.begin(), data.end(), std::ostreambuf_iterator<char>(f));
