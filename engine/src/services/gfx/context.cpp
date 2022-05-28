@@ -157,6 +157,13 @@ Context::Context(const wsi::Window &window) : window_(&window) {
       num_swapchain_images_ = std::min(num_swapchain_images_, surface_capabilities_.maxImageCount);
     recreateSwapchain();
     swapchain_images_ = device_->getSwapchainImagesKHR(*swapchain_);
+    for (auto image : swapchain_images_) {
+      vk::ImageViewCreateInfo image_view_create_info(
+          vk::ImageViewCreateFlags{}, image, vk::ImageViewType::e2D, surface_format_.format,
+          vk::ComponentMapping{},
+          vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+      swapchain_image_views_.push_back(device_->createImageViewUnique(image_view_create_info));
+    }
   }
   // Load pipeline cache
   {

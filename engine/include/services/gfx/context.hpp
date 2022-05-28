@@ -51,8 +51,11 @@ public:
   vk::Queue getMainQueue() const noexcept { return device_->getQueue(main_queue_family_index_, 0); }
   uint32_t getMainQueueFamilyIndex() const noexcept { return main_queue_family_index_; }
 
-  vk::Extent2D getSwapchainExtent() const noexcept { return swapchain_extent_; };
   vk::Image getCurrentImage() const noexcept { return swapchain_images_[current_swapchain_image_]; }
+  vk::ImageView getCurrentImageView() const noexcept {
+    return *swapchain_image_views_[current_swapchain_image_];
+  }
+  vk::Extent2D getSwapchainExtent() const noexcept { return swapchain_extent_; };
   void acquireNextImage(vk::Semaphore image_available);
   void presentImage(vk::Semaphore render_finished);
   void recreateSwapchain();
@@ -64,6 +67,8 @@ public:
 
   Frame &getCurrentFrame() noexcept { return frames_[current_frame_]; }
   void nextFrame() noexcept { current_frame_ = (current_frame_ + 1) % frames_in_flight; }
+
+  void waitIdle() const noexcept { device_->waitIdle(); }
 
 private:
   const wsi::Window *window_ = nullptr;
@@ -84,6 +89,7 @@ private:
   vk::Extent2D swapchain_extent_ = {};
   vk::UniqueSwapchainKHR swapchain_ = {};
   std::vector<vk::Image> swapchain_images_{};
+  std::vector<vk::UniqueImageView> swapchain_image_views_{};
 
   vk::UniquePipelineCache pipeline_cache_ = {};
 

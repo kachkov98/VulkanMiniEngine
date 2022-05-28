@@ -42,6 +42,7 @@ void Engine::init() {
 
 void Engine::terminate() {
   spdlog::info("Engine termination started");
+  Context::value().waitIdle();
   Context::value().savePipelineCache();
   Context::reset();
   Input::reset();
@@ -50,4 +51,35 @@ void Engine::terminate() {
   glfwTerminate();
   spdlog::info("Engine terminated successfully");
 }
+
+void Engine::run(Application &app, unsigned update_freq) {
+  const double delta = 1. / update_freq;
+  // Application initialization
+  app.onInit();
+  double previous = glfwGetTime(), lag = 0.;
+  while (!app.shouldClose()) {
+    double current = glfwGetTime(), elapsed = current - previous;
+    previous = current;
+    lag += elapsed;
+    // Process input
+    get<wsi::Input>().pollEvents();
+    // Process fixed-time updates
+    while (lag >= delta) {
+      app.onUpdate(delta);
+      lag -= delta;
+    }
+    // Process render
+    auto &context = get<gfx::Context>();
+    auto &frame = context.getCurrentFrame();
+    frame.reset();
+    context.acquireNextImage(frame.getImageAvailableSemaphore());
+    app.onRender(lag / delta);
+    frame.submit(get<gfx::Context>().getMainQueue());
+    context.presentImage(frame.getRenderFinishedSemaphore());
+    get<gfx::Context>().nextFrame();
+  }
+  // Application termination
+  app.onTerminate();
+}
+
 } // namespace vme
