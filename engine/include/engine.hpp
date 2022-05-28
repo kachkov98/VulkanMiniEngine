@@ -9,7 +9,7 @@ public:
   static void init();
   static void terminate();
   template <typename Service> static Service &get() {
-    return entt::service_locator<Service>::ref();
+    return entt::locator<Service>::value();
   }
 };
 } // namespace vme

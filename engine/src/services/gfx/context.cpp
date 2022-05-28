@@ -160,7 +160,7 @@ Context::Context(const wsi::Window &window) : window_(&window) {
   }
   // Load pipeline cache
   {
-    spdlog::info("[gfx] Loading shader cache from {}", cache_path.native());
+    spdlog::info("[gfx] Loading shader cache from {}", cache_path.string());
     std::ifstream f(cache_path, std::ios::in | std::ios::binary);
     std::vector<uint8_t> cache_data{std::istreambuf_iterator<char>(f),
                                     std::istreambuf_iterator<char>()};
@@ -231,7 +231,7 @@ void Context::recreateSwapchain() {
 }
 
 void Context::savePipelineCache() const {
-  spdlog::info("[gfx] Saving shader cache to {}", cache_path.native());
+  spdlog::info("[gfx] Saving shader cache to {}", cache_path.string());
   std::vector<uint8_t> data{device_->getPipelineCacheData(*pipeline_cache_)};
   std::ofstream f(cache_path, std::ios::out | std::ios::binary);
   std::copy(data.begin(), data.end(), std::ostreambuf_iterator<char>(f));

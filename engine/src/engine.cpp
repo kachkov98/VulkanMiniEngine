@@ -12,10 +12,10 @@
 
 namespace vme {
 
-using Executor = entt::service_locator<tf::Executor>;
-using Window = entt::service_locator<wsi::Window>;
-using Input = entt::service_locator<wsi::Input>;
-using Context = entt::service_locator<gfx::Context>;
+using Executor = entt::locator<tf::Executor>;
+using Window = entt::locator<wsi::Window>;
+using Input = entt::locator<wsi::Input>;
+using Context = entt::locator<gfx::Context>;
 
 void Engine::init() {
   spdlog::info("Engine initialization started");
@@ -24,25 +24,25 @@ void Engine::init() {
     throw std::runtime_error("Failed to initialize GLFW");
   spdlog::info("GLFW intialized successfully");
   // Thread pool
-  Executor::set(/*default number of workers*/);
-  spdlog::info("Created thread pool with {} workers", Executor::ref().num_workers());
+  Executor::emplace(/*default number of workers*/);
+  spdlog::info("Created thread pool with {} workers", Executor::value().num_workers());
   // Window
-  Window::set("VulkanMiniEngine");
+  Window::emplace("VulkanMiniEngine");
   spdlog::info("Window created successfully");
   // Input
-  Input::set(Window::ref().getHandle());
+  Input::emplace(Window::value().getHandle());
   spdlog::info("Input callbacks created successfully");
   // Graphics context
-  Context::set(Window::ref());
+  Context::emplace(Window::value());
   spdlog::info("Created context with device {}",
-               Context::ref().getPhysicalDevice().getProperties().deviceName);
+               Context::value().getPhysicalDevice().getProperties().deviceName);
 
   spdlog::info("Engine initialized successfully");
 }
 
 void Engine::terminate() {
   spdlog::info("Engine termination started");
-  Context::ref().savePipelineCache();
+  Context::value().savePipelineCache();
   Context::reset();
   Input::reset();
   Window::reset();
