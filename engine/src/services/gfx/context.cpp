@@ -130,7 +130,6 @@ Context::Context(const wsi::Window &window) : window_(&window) {
     if (std::none_of(formats.begin(), formats.end(),
                      [&](const auto &surface_format) { return surface_format == surface_format_; }))
       throw std::runtime_error("Default format (B8G8R8A8_SRGB) not supported by surface");
-    surface_capabilities_ = physical_device_.getSurfaceCapabilitiesKHR(*surface_);
   }
   // Create device and queue
   {
@@ -147,24 +146,16 @@ Context::Context(const wsi::Window &window) : window_(&window) {
     std::array<float, 1> queue_priorities{1.0f};
     vk::DeviceQueueCreateInfo queue_create_info{{}, main_queue_family_index_, queue_priorities};
     auto extensions = getDeviceExtensions();
-    device_ = physical_device_.createDeviceUnique({{}, queue_create_info, {}, extensions});
+    device_ = physical_device_.createDeviceUnique(vk::StructureChain{
+        vk::DeviceCreateInfo{{}, queue_create_info, {}, extensions},
+        vk::PhysicalDeviceVulkan11Features{}.setShaderDrawParameters(true),
+        vk::PhysicalDeviceVulkan12Features{}.setDrawIndirectCount(true),
+        vk::PhysicalDeviceVulkan13Features{}.setSynchronization2(true).setDynamicRendering(true)}
+                                                      .get());
     VULKAN_HPP_DEFAULT_DISPATCHER.init(*device_);
   }
   // Create swapchain
-  {
-    num_swapchain_images_ = std::max(num_swapchain_images_, surface_capabilities_.minImageCount);
-    if (surface_capabilities_.maxImageCount)
-      num_swapchain_images_ = std::min(num_swapchain_images_, surface_capabilities_.maxImageCount);
-    recreateSwapchain();
-    swapchain_images_ = device_->getSwapchainImagesKHR(*swapchain_);
-    for (auto image : swapchain_images_) {
-      vk::ImageViewCreateInfo image_view_create_info(
-          vk::ImageViewCreateFlags{}, image, vk::ImageViewType::e2D, surface_format_.format,
-          vk::ComponentMapping{},
-          vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
-      swapchain_image_views_.push_back(device_->createImageViewUnique(image_view_create_info));
-    }
-  }
+  recreateSwapchain();
   // Load pipeline cache
   {
     spdlog::info("[gfx] Loading shader cache from {}", cache_path.string());
@@ -190,36 +181,40 @@ Context::Context(const wsi::Window &window) : window_(&window) {
   }
   // Create in-flight frames
   {
-    for (unsigned i = 0; i < frames_in_flight; ++i)
-      frames_[i] = std::move(Frame(*device_, *allocator_, main_queue_family_index_));
+    for (auto &frame : frames_)
+      frame = std::move(Frame(*device_, *allocator_, main_queue_family_index_));
   }
 }
 
-void Context::acquireNextImage(vk::Semaphore image_available) {
-  auto result = device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, image_available, {},
-                                             &current_swapchain_image_);
-  if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR)
-    recreateSwapchain();
-  else if (result != vk::Result::eSuccess)
-    throw std::runtime_error("Failed to acquire next image");
+bool Context::acquireNextImage(vk::Semaphore image_available) {
+  return checkSwapchainResult(device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, image_available,
+                                                           {}, &current_swapchain_image_));
 }
 
-void Context::presentImage(vk::Semaphore render_finished) {
-  auto result =
-      getMainQueue().presentKHR({1, &render_finished, 1, &*swapchain_, &current_swapchain_image_});
-  if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR)
-    recreateSwapchain();
-  else if (result != vk::Result::eSuccess)
-    throw std::runtime_error("Failed to present image");
+bool Context::presentImage(vk::Semaphore render_finished) {
+  auto present_info =
+      vk::PresentInfoKHR{1, &render_finished, 1, &*swapchain_, &current_swapchain_image_};
+  return checkSwapchainResult(getMainQueue().presentKHR(&present_info));
+}
+
+void Context::savePipelineCache() const {
+  spdlog::info("[gfx] Saving shader cache to {}", cache_path.string());
+  std::vector<uint8_t> data{device_->getPipelineCacheData(*pipeline_cache_)};
+  std::ofstream f(cache_path, std::ios::out | std::ios::binary);
+  std::copy(data.begin(), data.end(), std::ostreambuf_iterator<char>(f));
 }
 
 void Context::recreateSwapchain() {
+  auto surface_capabilities = physical_device_.getSurfaceCapabilitiesKHR(*surface_);
+  num_swapchain_images_ = std::max(num_swapchain_images_, surface_capabilities.minImageCount);
+  if (surface_capabilities.maxImageCount)
+    num_swapchain_images_ = std::min(num_swapchain_images_, surface_capabilities.maxImageCount);
   auto current_extent = window_->getFramebufferSize();
   swapchain_extent_ =
-      vk::Extent2D{std::clamp(current_extent.x, surface_capabilities_.minImageExtent.width,
-                              surface_capabilities_.maxImageExtent.width),
-                   std::clamp(current_extent.y, surface_capabilities_.minImageExtent.height,
-                              surface_capabilities_.maxImageExtent.height)};
+      vk::Extent2D{std::clamp(current_extent.x, surface_capabilities.minImageExtent.width,
+                              surface_capabilities.maxImageExtent.width),
+                   std::clamp(current_extent.y, surface_capabilities.minImageExtent.height,
+                              surface_capabilities.maxImageExtent.height)};
   swapchain_ = device_->createSwapchainKHRUnique({{},
                                                   *surface_,
                                                   num_swapchain_images_,
@@ -235,12 +230,28 @@ void Context::recreateSwapchain() {
                                                   vk::PresentModeKHR::eFifo,
                                                   true,
                                                   *swapchain_});
+  swapchain_images_ = device_->getSwapchainImagesKHR(*swapchain_);
+  swapchain_image_views_.clear();
+  for (auto image : swapchain_images_) {
+    vk::ImageViewCreateInfo image_view_create_info(
+        vk::ImageViewCreateFlags{}, image, vk::ImageViewType::e2D, surface_format_.format,
+        vk::ComponentMapping{},
+        vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+    swapchain_image_views_.push_back(device_->createImageViewUnique(image_view_create_info));
+  }
 }
 
-void Context::savePipelineCache() const {
-  spdlog::info("[gfx] Saving shader cache to {}", cache_path.string());
-  std::vector<uint8_t> data{device_->getPipelineCacheData(*pipeline_cache_)};
-  std::ofstream f(cache_path, std::ios::out | std::ios::binary);
-  std::copy(data.begin(), data.end(), std::ostreambuf_iterator<char>(f));
+bool Context::checkSwapchainResult(vk::Result result) {
+  switch (result) {
+  case vk::Result::eSuccess:
+    return true;
+  case vk::Result::eErrorOutOfDateKHR:
+  case vk::Result::eSuboptimalKHR:
+    waitIdle();
+    recreateSwapchain();
+    return false;
+  default:
+    vk::throwResultException(result, "checkSwapchainResult");
+  }
 }
 } // namespace gfx

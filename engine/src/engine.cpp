@@ -69,13 +69,7 @@ void Engine::run(Application &app, unsigned update_freq) {
       lag -= delta;
     }
     // Process render
-    auto &context = get<gfx::Context>();
-    auto &frame = context.getCurrentFrame();
-    frame.reset();
-    context.acquireNextImage(frame.getImageAvailableSemaphore());
     app.onRender(lag / delta);
-    frame.submit(get<gfx::Context>().getMainQueue());
-    context.presentImage(frame.getRenderFinishedSemaphore());
     get<gfx::Context>().nextFrame();
   }
   // Application termination

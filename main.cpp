@@ -9,12 +9,15 @@ public:
   Example() : vme::Application("Example", {0, 0, 1}) {}
   bool shouldClose() override { return vme::Engine::get<wsi::Window>().shouldClose(); }
   void onInit() override {}
-  void onTerminate() override {}
+  void onTerminate() override { pipeline_.reset(); }
   void onUpdate(double delta) override {}
   void onRender(double alpha) override {
     auto &context = vme::Engine::get<gfx::Context>();
     auto &frame = context.getCurrentFrame();
     auto cmd_buf = frame.getCommandBuffer();
+    frame.reset();
+    if (!context.acquireNextImage(frame.getImageAvailableSemaphore()))
+      return;
     vk::RenderingAttachmentInfo color_attachment{
         context.getCurrentImageView(),
         vk::ImageLayout::eColorAttachmentOptimal,
@@ -51,10 +54,20 @@ public:
     cmd_buf.beginRendering({vk::RenderingFlags{},
                             vk::Rect2D{vk::Offset2D{0, 0}, context.getSwapchainExtent()}, 1, 0,
                             color_attachment});
+#if 0
+    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline_);
+    cmd_buf.draw(3, 1, 0, 0);
+#endif
     cmd_buf.endRendering();
     cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier2});
     cmd_buf.end();
+    frame.submit(context.getMainQueue());
+    if (!context.presentImage(frame.getRenderFinishedSemaphore()))
+      return;
   }
+
+private:
+  vk::UniquePipeline pipeline_;
 };
 
 int main(int argc, char *argv[]) {

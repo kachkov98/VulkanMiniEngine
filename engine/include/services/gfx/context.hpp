@@ -56,9 +56,8 @@ public:
     return *swapchain_image_views_[current_swapchain_image_];
   }
   vk::Extent2D getSwapchainExtent() const noexcept { return swapchain_extent_; };
-  void acquireNextImage(vk::Semaphore image_available);
-  void presentImage(vk::Semaphore render_finished);
-  void recreateSwapchain();
+  bool acquireNextImage(vk::Semaphore image_available);
+  bool presentImage(vk::Semaphore render_finished);
 
   vk::PipelineCache getPipelineCache() const noexcept { return *pipeline_cache_; }
   void savePipelineCache() const;
@@ -80,7 +79,6 @@ private:
 
   vk::UniqueSurfaceKHR surface_ = {};
   vk::SurfaceFormatKHR surface_format_ = {};
-  vk::SurfaceCapabilitiesKHR surface_capabilities_ = {};
 
   vk::UniqueDevice device_ = {};
   uint32_t main_queue_family_index_ = -1u;
@@ -97,6 +95,9 @@ private:
 
   unsigned current_frame_ = 0;
   std::array<Frame, frames_in_flight> frames_;
+
+  void recreateSwapchain();
+  bool checkSwapchainResult(vk::Result result);
 };
 } // namespace gfx
 
