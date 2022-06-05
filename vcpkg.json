@@ -20,16 +20,9 @@
     "tinygltf",
     {
       "name": "tracy",
-      "features": [ "cli-tools", "gui-tools" ]
+      "features": [ "cli-tools" ]
     },
     "vulkan",
     "vulkan-memory-allocator"
-  ],
-  "builtin-baseline": "14e7bb4ae24616ec54ff6b2f6ef4e8659434ea44",
-  "overrides": [
-    {
-      "name": "imgui",
-      "version": "1.86"
-    }
   ]
 }
