@@ -212,6 +212,7 @@ void Context::savePipelineCache() const {
 
 void Context::recreateSwapchain() {
   auto surface_capabilities = physical_device_.getSurfaceCapabilitiesKHR(*surface_);
+  auto present_modes = physical_device_.getSurfacePresentModesKHR(*surface_);
   num_swapchain_images_ = std::max(num_swapchain_images_, surface_capabilities.minImageCount);
   if (surface_capabilities.maxImageCount)
     num_swapchain_images_ = std::min(num_swapchain_images_, surface_capabilities.maxImageCount);
@@ -221,6 +222,10 @@ void Context::recreateSwapchain() {
                               surface_capabilities.maxImageExtent.width),
                    std::clamp(current_extent.y, surface_capabilities.minImageExtent.height,
                               surface_capabilities.maxImageExtent.height)};
+  vk::PresentModeKHR present_mode = vk::PresentModeKHR::eFifo;
+  if (auto it = std::find(present_modes.begin(), present_modes.end(), vk::PresentModeKHR::eMailbox);
+      it != present_modes.end())
+    present_mode = *it;
   swapchain_ = device_->createSwapchainKHRUnique({{},
                                                   *surface_,
                                                   num_swapchain_images_,
@@ -233,7 +238,7 @@ void Context::recreateSwapchain() {
                                                   {},
                                                   vk::SurfaceTransformFlagBitsKHR::eIdentity,
                                                   vk::CompositeAlphaFlagBitsKHR::eOpaque,
-                                                  vk::PresentModeKHR::eFifo,
+                                                  present_mode,
                                                   true,
                                                   *swapchain_});
   swapchain_images_ = device_->getSwapchainImagesKHR(*swapchain_);
