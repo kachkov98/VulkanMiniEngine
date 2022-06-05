@@ -2,6 +2,7 @@
 #include "services/wsi/window.hpp"
 
 #include <GLFW/glfw3.h>
+#include <Tracy.hpp>
 #include <spdlog/spdlog.h>
 
 #include <filesystem>
@@ -57,8 +58,9 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 }
 #endif
 
-Frame::Frame(vk::Device device, vma::Allocator allocator, uint32_t queue_family_index)
-    : device_(device), allocator_(allocator) {
+Frame::Frame(vk::PhysicalDevice physical_device, vk::Device device, vk::Queue queue,
+             uint32_t queue_family_index, vma::Allocator allocator)
+    : device_(device), queue_(queue), allocator_(allocator) {
   image_available_ = device_.createSemaphoreUnique({});
   render_finished_ = device_.createSemaphoreUnique({});
   render_fence_ = device_.createFenceUnique({vk::FenceCreateFlagBits::eSignaled});
@@ -67,15 +69,16 @@ Frame::Frame(vk::Device device, vma::Allocator allocator, uint32_t queue_family_
   command_buffer_ = std::move(
       device_.allocateCommandBuffersUnique({*command_pool_, vk::CommandBufferLevel::ePrimary, 1})
           .front());
+  tracy_vk_ctx_ = UniqueTracyVkCtx(physical_device, device, queue, *command_buffer_);
   memory_pool_ = allocator_.createPoolUnique(
       {/*memory type index*/ 0, VMA_POOL_CREATE_LINEAR_ALGORITHM_BIT, 0, 0, 0, 1.0f, 0, nullptr});
 }
 
-void Frame::submit(vk::Queue queue) const {
+void Frame::submit() const {
   vk::PipelineStageFlags wait_stage_mask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
   vk::SubmitInfo submit_info{*image_available_, wait_stage_mask, *command_buffer_,
                              *render_finished_};
-  queue.submit(submit_info, *render_fence_);
+  queue_.submit(submit_info, *render_fence_);
 }
 
 void Frame::reset() const {
@@ -182,16 +185,19 @@ Context::Context(const wsi::Window &window) : window_(&window) {
   // Create in-flight frames
   {
     for (auto &frame : frames_)
-      frame = std::move(Frame(*device_, *allocator_, main_queue_family_index_));
+      frame = std::move(
+          Frame(physical_device_, *device_, getMainQueue(), main_queue_family_index_, *allocator_));
   }
 }
 
 bool Context::acquireNextImage(vk::Semaphore image_available) {
+  ZoneScopedN("acquireNextImage");
   return checkSwapchainResult(device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, image_available,
                                                            {}, &current_swapchain_image_));
 }
 
 bool Context::presentImage(vk::Semaphore render_finished) {
+  ZoneScopedN("presentImage");
   auto present_info =
       vk::PresentInfoKHR{1, &render_finished, 1, &*swapchain_, &current_swapchain_image_};
   return checkSwapchainResult(getMainQueue().presentKHR(&present_info));
@@ -239,6 +245,7 @@ void Context::recreateSwapchain() {
         vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
     swapchain_image_views_.push_back(device_->createImageViewUnique(image_view_create_info));
   }
+  spdlog::info("[gfx] Swapchain extent: {}x{}", swapchain_extent_.width, swapchain_extent_.height);
 }
 
 bool Context::checkSwapchainResult(vk::Result result) {

@@ -15,7 +15,10 @@
     "stb",
     "taskflow",
     "tinygltf",
-    "tracy",
+    {
+      "name": "tracy",
+      "features": ["cli-tools", "gui-tools"]
+    },
     "vulkan",
     "vulkan-memory-allocator"
   ]

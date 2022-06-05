@@ -2,22 +2,30 @@
 #include "services/gfx/context.hpp"
 #include "services/wsi/input.hpp"
 #include "services/wsi/window.hpp"
+
 #include <cxxopts.hpp>
+
+#include <chrono>
+#include <thread>
 
 class Example : public vme::Application {
 public:
   Example() : vme::Application("Example", {0, 0, 1}) {}
+
+private:
   bool shouldClose() override { return vme::Engine::get<wsi::Window>().shouldClose(); }
   void onInit() override {}
   void onTerminate() override { pipeline_.reset(); }
-  void onUpdate(double delta) override {}
+  void onUpdate(double delta) override {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
   void onRender(double alpha) override {
     auto &context = vme::Engine::get<gfx::Context>();
     auto &frame = context.getCurrentFrame();
     auto cmd_buf = frame.getCommandBuffer();
-    frame.reset();
     if (!context.acquireNextImage(frame.getImageAvailableSemaphore()))
       return;
+    frame.reset();
     vk::RenderingAttachmentInfo color_attachment{
         context.getCurrentImageView(),
         vk::ImageLayout::eColorAttachmentOptimal,
@@ -51,17 +59,21 @@ public:
         vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
     cmd_buf.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
     cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier1});
-    cmd_buf.beginRendering({vk::RenderingFlags{},
-                            vk::Rect2D{vk::Offset2D{0, 0}, context.getSwapchainExtent()}, 1, 0,
-                            color_attachment});
+    {
+      TracyVkZone(frame.getTracyVkCtx(), cmd_buf, "Render pass");
+      cmd_buf.beginRendering({vk::RenderingFlags{},
+                              vk::Rect2D{vk::Offset2D{0, 0}, context.getSwapchainExtent()}, 1, 0,
+                              color_attachment});
 #if 0
     cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline_);
     cmd_buf.draw(3, 1, 0, 0);
 #endif
-    cmd_buf.endRendering();
+      cmd_buf.endRendering();
+    }
     cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier2});
+    TracyVkCollect(frame.getTracyVkCtx(), cmd_buf);
     cmd_buf.end();
-    frame.submit(context.getMainQueue());
+    frame.submit();
     if (!context.presentImage(frame.getRenderFinishedSemaphore()))
       return;
   }
@@ -76,7 +88,7 @@ int main(int argc, char *argv[]) {
   Example example;
   try {
     vme::Engine::init();
-    vme::Engine::run(example, 30);
+    example.run(30);
     vme::Engine::terminate();
   } catch (const std::exception &e) {
     std::cerr << e.what() << std::endl;

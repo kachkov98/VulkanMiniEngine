@@ -17,6 +17,41 @@ using Window = entt::locator<wsi::Window>;
 using Input = entt::locator<wsi::Input>;
 using Context = entt::locator<gfx::Context>;
 
+void Application::run(unsigned update_freq) {
+  const double delta = 1. / update_freq;
+  // Application initialization
+  {
+    ZoneScopedN("Init");
+    onInit();
+  }
+  double previous = glfwGetTime(), lag = 0.;
+  while (!shouldClose()) {
+    double current = glfwGetTime(), elapsed = current - previous;
+    previous = current;
+    lag += elapsed;
+    // Process input
+    Engine::get<wsi::Input>().pollEvents();
+    // Process fixed-time updates
+    while (lag >= delta) {
+      ZoneScopedN("Update");
+      onUpdate(delta);
+      lag -= delta;
+    }
+    // Process render
+    {
+      ZoneScopedN("Render");
+      onRender(lag / delta);
+    }
+    Engine::get<gfx::Context>().nextFrame();
+    FrameMark;
+  }
+  // Application termination
+  {
+    ZoneScopedN("Terminate");
+    onTerminate();
+  }
+}
+
 void Engine::init() {
   spdlog::info("Engine initialization started");
   // GLFW
@@ -50,30 +85,6 @@ void Engine::terminate() {
   Executor::reset();
   glfwTerminate();
   spdlog::info("Engine terminated successfully");
-}
-
-void Engine::run(Application &app, unsigned update_freq) {
-  const double delta = 1. / update_freq;
-  // Application initialization
-  app.onInit();
-  double previous = glfwGetTime(), lag = 0.;
-  while (!app.shouldClose()) {
-    double current = glfwGetTime(), elapsed = current - previous;
-    previous = current;
-    lag += elapsed;
-    // Process input
-    get<wsi::Input>().pollEvents();
-    // Process fixed-time updates
-    while (lag >= delta) {
-      app.onUpdate(delta);
-      lag -= delta;
-    }
-    // Process render
-    app.onRender(lag / delta);
-    get<gfx::Context>().nextFrame();
-  }
-  // Application termination
-  app.onTerminate();
 }
 
 } // namespace vme
