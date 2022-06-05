@@ -3,13 +3,13 @@ on: [push]
 
 jobs:
   job:
-    name: ${{ matrix.os }}-${{ github.workflow }}
+    name: ${{ matrix.os }}-${{ matrix.preset }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        preset: ['ninja-multi-vcpkg-debug', 'ninja-multi-vcpkg-release']
+        preset: [debug, release]
 
     steps:
       - name: Install missing dependencies
@@ -42,4 +42,4 @@ jobs:
         id: runcmake
         with:
           configurePreset: 'ninja-multi-vcpkg'
-          buildPreset: ${{ matrix.preset }}
+          buildPreset: ninja-multi-vcpkg-${{ matrix.preset }}
