@@ -8,6 +8,8 @@ target_sources(engine
     "src/services/gfx/context.cpp"
     "src/services/gfx/allocator.cpp"
     "src/services/gfx/descriptors.cpp"
+    "src/services/gfx/pipelines.cpp"
+    "src/services/gfx/shaders.cpp"
     "src/renderer/render_graph.cpp")
 
 target_include_directories(engine

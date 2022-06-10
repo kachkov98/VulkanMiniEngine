@@ -5,34 +5,37 @@
 #include <Tracy.hpp>
 #include <spdlog/spdlog.h>
 
-#include <filesystem>
-#include <fstream>
+#include <algorithm>
 #include <stdexcept>
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
 namespace gfx {
-static const std::filesystem::path cache_path =
-    std::filesystem::current_path() / "shader_cache.bin";
 
 static std::vector<const char *> getInstanceExtensions() {
   uint32_t count;
   const char **glfw_extensions = glfwGetRequiredInstanceExtensions(&count);
   std::vector<const char *> extensions(glfw_extensions, glfw_extensions + count);
 #ifndef NDEBUG
-  extensions.emplace_back("VK_EXT_debug_utils");
+  extensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
   return extensions;
 }
 
-static std::vector<const char *> getDeviceExtensions() { return {VK_KHR_SWAPCHAIN_EXTENSION_NAME}; }
+static std::vector<const char *> getRequiredDeviceExtensions() {
+  return {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+}
+
+static std::vector<const char *> getDesiredDeviceExtensions() {
+  return {VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME};
+}
 
 static std::vector<const char *> getValidationLayers() {
-#ifdef NDEBUG
-  return {};
-#else
-  return {"VK_LAYER_KHRONOS_validation"};
+  return {
+#ifndef NDEBUG
+      "VK_LAYER_KHRONOS_validation"
 #endif
+  };
 }
 
 #ifndef NDEBUG
@@ -120,6 +123,25 @@ Context::Context(const wsi::Window &window) : window_(&window) {
     for (const auto &physical_device : physical_devices)
       spdlog::info("[gfx]     {}", physical_device.getProperties().deviceName);
     physical_device_ = physical_devices[0];
+    spdlog::info("[gfx] Selected device {}", physical_device_.getProperties().deviceName);
+    auto available_extensions = physical_device_.enumerateDeviceExtensionProperties();
+    auto extension_supported = [&available_extensions](std::string_view extension) {
+      return std::find_if(available_extensions.begin(), available_extensions.end(),
+                          [extension](const vk::ExtensionProperties &properties) {
+                            return properties.extensionName == extension;
+                          }) != available_extensions.end();
+    };
+    for (auto required_extension : getRequiredDeviceExtensions()) {
+      if (!extension_supported(required_extension))
+        throw std::runtime_error("Required device extension not supported");
+      enabled_extensions_.push_back(required_extension);
+    }
+    for (auto desired_extension : getDesiredDeviceExtensions())
+      if (extension_supported(desired_extension))
+        enabled_extensions_.push_back(desired_extension);
+    spdlog::info("[gfx] Enabled extensions:");
+    for (auto extension : enabled_extensions_)
+      spdlog::info("[gfx]   {}", extension);
   }
   // Create surface
   {
@@ -148,9 +170,8 @@ Context::Context(const wsi::Window &window) : window_(&window) {
       throw std::runtime_error("No device queue with compute, graphics and present support");
     std::array<float, 1> queue_priorities{1.0f};
     vk::DeviceQueueCreateInfo queue_create_info{{}, main_queue_family_index_, queue_priorities};
-    auto extensions = getDeviceExtensions();
     device_ = physical_device_.createDeviceUnique(vk::StructureChain{
-        vk::DeviceCreateInfo{{}, queue_create_info, {}, extensions},
+        vk::DeviceCreateInfo{{}, queue_create_info, {}, enabled_extensions_},
         vk::PhysicalDeviceVulkan11Features{}.setShaderDrawParameters(true),
         vk::PhysicalDeviceVulkan12Features{}.setDrawIndirectCount(true),
         vk::PhysicalDeviceVulkan13Features{}.setSynchronization2(true).setDynamicRendering(true)}
@@ -159,15 +180,11 @@ Context::Context(const wsi::Window &window) : window_(&window) {
   }
   // Create swapchain
   recreateSwapchain();
-  // Load pipeline cache
-  {
-    spdlog::info("[gfx] Loading shader cache from {}", cache_path.string());
-    std::ifstream f(cache_path, std::ios::in | std::ios::binary);
-    std::vector<uint8_t> cache_data{std::istreambuf_iterator<char>(f),
-                                    std::istreambuf_iterator<char>()};
-    pipeline_cache_ =
-        device_->createPipelineCacheUnique({{}, cache_data.size(), cache_data.data()});
-  }
+  // Create resource caches
+  descriptor_set_layout_cache_ = DescriptorSetLayoutCache(*device_);
+  shader_module_cache_ = ShaderModuleCache(*device_);
+  pipeline_layout_cache_ = PipelineLayoutCache(*device_);
+  pipeline_cache_ = PipelineCache(*device_);
   // Create allocator
   {
     VmaVulkanFunctions vma_vk_funcs{};
@@ -175,19 +192,26 @@ Context::Context(const wsi::Window &window) : window_(&window) {
     vma_vk_funcs.vkGetDeviceProcAddr = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetDeviceProcAddr;
 
     vma::AllocatorCreateInfo create_info{};
-    create_info.vulkanApiVersion = VK_API_VERSION_1_2;
+    create_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    if (isExtensionEnabled(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME))
+      create_info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    create_info.vulkanApiVersion = VK_API_VERSION_1_3;
     create_info.physicalDevice = physical_device_;
     create_info.device = *device_;
     create_info.instance = *instance_;
     create_info.pVulkanFunctions = &vma_vk_funcs;
     allocator_ = vma::createAllocatorUnique(create_info);
+    allocator_->setCurrentFrameIndex(current_frame_);
   }
   // Create in-flight frames
-  {
-    for (auto &frame : frames_)
-      frame = std::move(
-          Frame(physical_device_, *device_, getMainQueue(), main_queue_family_index_, *allocator_));
-  }
+  for (auto &frame : frames_)
+    frame =
+        Frame(physical_device_, *device_, getMainQueue(), main_queue_family_index_, *allocator_);
+}
+
+bool Context::isExtensionEnabled(std::string_view name) const noexcept {
+  return std::find(enabled_extensions_.begin(), enabled_extensions_.end(), name) !=
+         enabled_extensions_.end();
 }
 
 bool Context::acquireNextImage(vk::Semaphore image_available) {
@@ -203,26 +227,21 @@ bool Context::presentImage(vk::Semaphore render_finished) {
   return checkSwapchainResult(getMainQueue().presentKHR(&present_info));
 }
 
-void Context::savePipelineCache() const {
-  spdlog::info("[gfx] Saving shader cache to {}", cache_path.string());
-  std::vector<uint8_t> data{device_->getPipelineCacheData(*pipeline_cache_)};
-  std::ofstream f(cache_path, std::ios::out | std::ios::binary);
-  std::copy(data.begin(), data.end(), std::ostreambuf_iterator<char>(f));
-}
-
 void Context::recreateSwapchain() {
-  auto surface_capabilities = physical_device_.getSurfaceCapabilitiesKHR(*surface_);
-  auto present_modes = physical_device_.getSurfacePresentModesKHR(*surface_);
-  num_swapchain_images_ = std::max(num_swapchain_images_, surface_capabilities.minImageCount);
-  if (surface_capabilities.maxImageCount)
-    num_swapchain_images_ = std::min(num_swapchain_images_, surface_capabilities.maxImageCount);
   auto current_extent = window_->getFramebufferSize();
+  if (!current_extent.x || !current_extent.y)
+    return;
+  auto surface_capabilities = physical_device_.getSurfaceCapabilitiesKHR(*surface_);
   swapchain_extent_ =
       vk::Extent2D{std::clamp(current_extent.x, surface_capabilities.minImageExtent.width,
                               surface_capabilities.maxImageExtent.width),
                    std::clamp(current_extent.y, surface_capabilities.minImageExtent.height,
                               surface_capabilities.maxImageExtent.height)};
-  vk::PresentModeKHR present_mode = vk::PresentModeKHR::eFifo;
+  num_swapchain_images_ = std::max(num_swapchain_images_, surface_capabilities.minImageCount);
+  if (surface_capabilities.maxImageCount)
+    num_swapchain_images_ = std::min(num_swapchain_images_, surface_capabilities.maxImageCount);
+  auto present_modes = physical_device_.getSurfacePresentModesKHR(*surface_);
+  auto present_mode = vk::PresentModeKHR::eFifo;
   if (auto it = std::find(present_modes.begin(), present_modes.end(), vk::PresentModeKHR::eMailbox);
       it != present_modes.end())
     present_mode = *it;

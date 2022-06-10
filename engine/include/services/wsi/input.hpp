@@ -4,7 +4,7 @@
 #include <entt/signal/dispatcher.hpp>
 #include <glm/vec2.hpp>
 
-struct GLFWwindow;
+#include "window.hpp"
 
 namespace wsi {
 
@@ -14,7 +14,7 @@ struct ScrollEvent {};
 
 class Input {
 public:
-  Input(GLFWwindow *window) : window_(window){};
+  Input(const Window &window) : window_(window.getHandle()){};
   void pollEvents() const noexcept;
 
   bool isKeyPressed(int key) const noexcept;

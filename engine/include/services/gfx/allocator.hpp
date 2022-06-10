@@ -219,6 +219,9 @@ public:
   explicit operator bool() const noexcept { return allocator_ != VK_NULL_HANDLE; }
   bool operator!() const noexcept { return allocator_ == VK_NULL_HANDLE; }
 
+  VmaAllocatorInfo getInfo() const noexcept;
+  void setCurrentFrameIndex(uint32_t index) noexcept;
+
   Allocation createAllocation(const vk::MemoryRequirements &memory_requirements,
                               const AllocationCreateInfo &alloc_info);
   UniqueAllocation createAllocationUnique(const vk::MemoryRequirements &memory_requirements,
@@ -234,9 +237,16 @@ public:
                                   AllocationCreateInfo &alloc_info);
   void destroy(Buffer buffer) noexcept;
 
+  vk::Buffer createAliasingBuffer(Allocation allocation, vk::BufferCreateInfo &buffer_info);
+  vk::UniqueBuffer createAliasingBufferUnique(Allocation allocation,
+                                              vk::BufferCreateInfo &buffer_info);
+
   Image createImage(vk::ImageCreateInfo &image_info, AllocationCreateInfo &alloc_info);
   UniqueImage createImageUnique(vk::ImageCreateInfo &image_info, AllocationCreateInfo &alloc_info);
   void destroy(Image image) noexcept;
+
+  vk::Image createAliasingImage(Allocation allocation, vk::ImageCreateInfo &image_info);
+  vk::UniqueImage createAliasingImageUnique(Allocation allocation, vk::ImageCreateInfo &image_info);
 
   Pool createPool(const PoolCreateInfo &pool_info);
   UniquePool createPoolUnique(const PoolCreateInfo &pool_info);

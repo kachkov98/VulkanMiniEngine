@@ -3,10 +3,14 @@
 
 #include "allocator.hpp"
 #include "descriptors.hpp"
+#include "pipelines.hpp"
+#include "shaders.hpp"
 
 #include <vulkan/vulkan.hpp>
 
 #include <TracyVulkan.hpp>
+
+#include <string_view>
 
 namespace wsi {
 class Window;
@@ -18,7 +22,10 @@ public:
   UniqueTracyVkCtx() = default;
   UniqueTracyVkCtx(vk::PhysicalDevice physical_device, vk::Device device, vk::Queue queue,
                    vk::CommandBuffer command_buffer) {
-    tracy_vk_ctx_ = TracyVkContext(physical_device, device, queue, command_buffer);
+    tracy_vk_ctx_ = TracyVkContextCalibrated(
+        physical_device, device, queue, command_buffer,
+        VULKAN_HPP_DEFAULT_DISPATCHER.vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
+        VULKAN_HPP_DEFAULT_DISPATCHER.vkGetCalibratedTimestampsEXT);
   }
   UniqueTracyVkCtx(const UniqueTracyVkCtx &) = delete;
   UniqueTracyVkCtx(UniqueTracyVkCtx &&rhs) noexcept : tracy_vk_ctx_(rhs.release()) {}
@@ -84,11 +91,12 @@ private:
 
 class Context final {
 public:
-  static constexpr unsigned frames_in_flight = 2;
+  static constexpr unsigned frames_in_flight = 3;
 
   Context(const wsi::Window &window);
 
   vk::PhysicalDevice getPhysicalDevice() const noexcept { return physical_device_; }
+  bool isExtensionEnabled(std::string_view name) const noexcept;
 
   vk::SurfaceKHR getSurface() const noexcept { return *surface_; }
   vk::SurfaceFormatKHR getSurfaceFormat() const noexcept { return surface_format_; }
@@ -105,13 +113,17 @@ public:
   bool acquireNextImage(vk::Semaphore image_available);
   bool presentImage(vk::Semaphore render_finished);
 
-  vk::PipelineCache getPipelineCache() const noexcept { return *pipeline_cache_; }
-  void savePipelineCache() const;
+  ShaderModuleCache &getShaderModuleCache() noexcept { return shader_module_cache_; }
+  DescriptorSetLayoutCache &getDescriptorSetLayoutCache() noexcept {
+    return descriptor_set_layout_cache_;
+  }
+  PipelineLayoutCache &getPipelineLayoutCache() noexcept { return pipeline_layout_cache_; }
+  PipelineCache &getPipelineCache() noexcept { return pipeline_cache_; }
 
   vma::Allocator getAllocator() const noexcept { return *allocator_; }
 
-  Frame &getCurrentFrame() noexcept { return frames_[current_frame_]; }
-  void nextFrame() noexcept { current_frame_ = (current_frame_ + 1) % frames_in_flight; }
+  Frame &getCurrentFrame() noexcept { return frames_[current_frame_ % frames_in_flight]; }
+  void nextFrame() noexcept { allocator_->setCurrentFrameIndex(++current_frame_); }
 
   void waitIdle() const noexcept { device_->waitIdle(); }
 
@@ -122,6 +134,7 @@ private:
   vk::UniqueDebugUtilsMessengerEXT messenger_ = {};
 #endif
   vk::PhysicalDevice physical_device_ = {};
+  std::vector<const char *> enabled_extensions_ = {};
 
   vk::UniqueSurfaceKHR surface_ = {};
   vk::SurfaceFormatKHR surface_format_ = {};
@@ -135,11 +148,14 @@ private:
   std::vector<vk::Image> swapchain_images_{};
   std::vector<vk::UniqueImageView> swapchain_image_views_{};
 
-  vk::UniquePipelineCache pipeline_cache_ = {};
+  DescriptorSetLayoutCache descriptor_set_layout_cache_;
+  ShaderModuleCache shader_module_cache_;
+  PipelineLayoutCache pipeline_layout_cache_;
+  PipelineCache pipeline_cache_;
 
   vma::UniqueAllocator allocator_ = {};
 
-  unsigned current_frame_ = 0;
+  uint32_t current_frame_ = 0;
   std::array<Frame, frames_in_flight> frames_;
 
   void recreateSwapchain();

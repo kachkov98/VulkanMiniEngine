@@ -48,6 +48,8 @@ void Application::run(unsigned update_freq) {
   // Application termination
   {
     ZoneScopedN("Terminate");
+    Engine::get<tf::Executor>().wait_for_all();
+    Engine::get<gfx::Context>().waitIdle();
     onTerminate();
   }
 }
@@ -58,31 +60,29 @@ void Engine::init() {
   if (!glfwInit())
     throw std::runtime_error("Failed to initialize GLFW");
   spdlog::info("GLFW intialized successfully");
-  // Thread pool
-  Executor::emplace(/*default number of workers*/);
-  spdlog::info("Created thread pool with {} workers", Executor::value().num_workers());
   // Window
   Window::emplace("VulkanMiniEngine");
   spdlog::info("Window created successfully");
   // Input
-  Input::emplace(Window::value().getHandle());
+  Input::emplace(Window::value());
   spdlog::info("Input callbacks created successfully");
   // Graphics context
   Context::emplace(Window::value());
-  spdlog::info("Created context with device {}",
-               Context::value().getPhysicalDevice().getProperties().deviceName);
+  spdlog::info("Vulkan context created successfully");
+  // Thread pool
+  Executor::emplace(/*default number of workers*/);
+  spdlog::info("Created thread pool with {} workers", Executor::value().num_workers());
 
   spdlog::info("Engine initialized successfully");
 }
 
 void Engine::terminate() {
   spdlog::info("Engine termination started");
-  Context::value().waitIdle();
-  Context::value().savePipelineCache();
+  Context::value().getPipelineCache().save();
+  Executor::reset();
   Context::reset();
   Input::reset();
   Window::reset();
-  Executor::reset();
   glfwTerminate();
   spdlog::info("Engine terminated successfully");
 }
