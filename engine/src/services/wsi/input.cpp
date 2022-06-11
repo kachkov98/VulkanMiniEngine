@@ -15,4 +15,4 @@ glm::vec2 Input::getCursorPos() const noexcept {
   glfwGetCursorPos(window_, &xpos, &ypos);
   return glm::vec2(xpos, ypos);
 }
-}
+} // namespace wsi

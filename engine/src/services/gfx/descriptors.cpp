@@ -52,4 +52,13 @@ void DescriptorSetAllocator::reset() {
   used_pools_.clear();
   current_pool_ = nullptr;
 }
+
+DescriptorSet DescriptorSetBuilder::build() {
+  auto layout = DescriptorSetLayoutBuilder::build();
+  auto descriptor_set = descriptor_allocator_->allocate(layout);
+  for (auto &write : writes_)
+    write.dstSet = *descriptor_set;
+  descriptor_allocator_->getDevice().updateDescriptorSets(writes_, {});
+  return DescriptorSet(std::move(descriptor_set), layout);
+}
 } // namespace gfx

@@ -6,6 +6,7 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_hash.hpp>
 
+#include <algorithm>
 #include <vector>
 
 namespace gfx {
@@ -24,10 +25,33 @@ private:
   vk::Device device_;
 };
 
+class DescriptorSetLayoutBuilder {
+public:
+  DescriptorSetLayoutBuilder(DescriptorSetLayoutCache &descriptor_set_layout_cache)
+      : descriptor_set_layout_cache_(&descriptor_set_layout_cache) {}
+
+  DescriptorSetLayoutBuilder &binding(uint32_t binding, vk::DescriptorType type, uint32_t count,
+                                      vk::ShaderStageFlags stages = vk::ShaderStageFlagBits::eAll) {
+    bindings_.emplace_back(binding, type, count, stages, nullptr);
+    return *this;
+  }
+  vk::DescriptorSetLayout build() {
+    std::sort(bindings_.begin(), bindings_.end());
+    return *descriptor_set_layout_cache_->get({{}, bindings_});
+  }
+
+private:
+  DescriptorSetLayoutCache *descriptor_set_layout_cache_{nullptr};
+
+  std::vector<vk::DescriptorSetLayoutBinding> bindings_;
+};
+
 class DescriptorSetAllocator final {
 public:
   DescriptorSetAllocator() = default;
   DescriptorSetAllocator(vk::Device device) noexcept : device_(device) {}
+
+  vk::Device getDevice() const noexcept { return device_; }
 
   vk::UniqueDescriptorSet allocate(const vk::DescriptorSetLayout &descriptor_layout);
   void reset();
@@ -59,41 +83,35 @@ private:
   vk::DescriptorSetLayout layout_ = {};
 };
 
-class DescriptorSetBuilder final {
+class DescriptorSetBuilder final : public DescriptorSetLayoutBuilder {
 public:
   DescriptorSetBuilder(DescriptorSetAllocator &descriptor_allocator,
                        DescriptorSetLayoutCache &descriptor_layout_cache)
-      : descriptor_allocator_(&descriptor_allocator),
-        descriptor_set_layout_cache_(&descriptor_layout_cache){};
+      : DescriptorSetLayoutBuilder(descriptor_layout_cache),
+        descriptor_allocator_(&descriptor_allocator){};
 
-  DescriptorSetBuilder &bind(uint32_t binding,
+  DescriptorSetBuilder &bind(uint32_t binding, vk::DescriptorType type,
                              vk::ArrayProxyNoTemporaries<vk::DescriptorBufferInfo> buffer_info,
-                             vk::DescriptorType type,
                              vk::ShaderStageFlags stage_flags = vk::ShaderStageFlagBits::eAll) {
     {
-      bindings_.emplace_back(binding, type, buffer_info.size(), stage_flags, nullptr);
-      writes_.emplace_back();
+      DescriptorSetLayoutBuilder::binding(binding, type, buffer_info.size(), stage_flags);
+      writes_.emplace_back(nullptr, binding, 0, type, nullptr, buffer_info);
       return *this;
     }
   }
-  DescriptorSetBuilder &bind(uint32_t binding,
+  DescriptorSetBuilder &bind(uint32_t binding, vk::DescriptorType type,
                              vk::ArrayProxyNoTemporaries<vk::DescriptorImageInfo> image_info,
-                             vk::DescriptorType type,
                              vk::ShaderStageFlags stage_flags = vk::ShaderStageFlagBits::eAll) {
-    bindings_.emplace_back(binding, type, image_info.size(), stage_flags, nullptr);
+    DescriptorSetLayoutBuilder::binding(binding, type, image_info.size(), stage_flags);
+    writes_.emplace_back(nullptr, binding, 0, type, image_info, nullptr);
     return *this;
   }
 
-  DescriptorSet build() {
-    auto &layout = *descriptor_set_layout_cache_->get({{}, bindings_});
-    return DescriptorSet(descriptor_allocator_->allocate(layout), layout);
-  }
+  DescriptorSet build();
 
 private:
   DescriptorSetAllocator *descriptor_allocator_{nullptr};
-  DescriptorSetLayoutCache *descriptor_set_layout_cache_{nullptr};
 
-  std::vector<vk::DescriptorSetLayoutBinding> bindings_;
   std::vector<vk::WriteDescriptorSet> writes_;
 };
 } // namespace gfx

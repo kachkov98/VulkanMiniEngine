@@ -121,7 +121,7 @@ Context::Context(const wsi::Window &window) : window_(&window) {
       throw std::runtime_error("No supported vulkan physical devices");
     spdlog::info("[gfx] Supported devices:");
     for (const auto &physical_device : physical_devices)
-      spdlog::info("[gfx]     {}", physical_device.getProperties().deviceName);
+      spdlog::info("[gfx]    {}", physical_device.getProperties().deviceName);
     physical_device_ = physical_devices[0];
     spdlog::info("[gfx] Selected device {}", physical_device_.getProperties().deviceName);
     auto available_extensions = physical_device_.enumerateDeviceExtensionProperties();
@@ -141,7 +141,7 @@ Context::Context(const wsi::Window &window) : window_(&window) {
         enabled_extensions_.push_back(desired_extension);
     spdlog::info("[gfx] Enabled extensions:");
     for (auto extension : enabled_extensions_)
-      spdlog::info("[gfx]   {}", extension);
+      spdlog::info("[gfx]    {}", extension);
   }
   // Create surface
   {

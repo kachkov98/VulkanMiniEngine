@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
 
@@ -12,18 +13,19 @@
   } while (0)
 
 namespace gfx {
-static const std::filesystem::path shader_path = std::filesystem::current_path() / "../shaders";
+static const std::filesystem::path shaders_path =
+    std::filesystem::current_path() / ".." / "shaders";
 
-ShaderModule::ShaderModule(vk::Device device, const ShaderCode &code)
+ShaderModule::ShaderModule(vk::Device device, const Code &code)
     : shader_module_(device.createShaderModuleUnique({{}, code})), reflection_(code) {
   SPV_CHECK(reflection_.GetResult());
 }
 
-static std::vector<vk::DescriptorSetLayoutBinding>
+static DescriptorSetLayoutBindings
 getDescriptorSetLayoutBindings(const SpvReflectDescriptorSet *set, vk::ShaderStageFlagBits stage) {
   std::vector<const SpvReflectDescriptorBinding *> descriptor_bindings(
       set->bindings, set->bindings + set->binding_count);
-  std::vector<vk::DescriptorSetLayoutBinding> res;
+  DescriptorSetLayoutBindings res;
   std::transform(descriptor_bindings.begin(), descriptor_bindings.end(), std::back_inserter(res),
                  [&](const SpvReflectDescriptorBinding *binding) {
                    return vk::DescriptorSetLayoutBinding(
@@ -47,27 +49,27 @@ DescriptorSetLayouts ShaderModule::getDescriptorSetLayouts() const {
   return res;
 }
 
-PushConstantRanges ShaderModule::getPushConstantRanges() const {
+PushConstantRange ShaderModule::getPushConstantRange() const {
   uint32_t count = 0;
   SPV_CHECK(reflection_.EnumeratePushConstantBlocks(&count, nullptr));
+  if (!count)
+    return {};
   std::vector<SpvReflectBlockVariable *> push_constant_blocks(count);
   SPV_CHECK(reflection_.EnumeratePushConstantBlocks(&count, push_constant_blocks.data()));
-  auto stage = getStage();
-  PushConstantRanges res;
-  std::transform(push_constant_blocks.begin(), push_constant_blocks.end(), std::back_inserter(res),
-                 [&](const SpvReflectBlockVariable *var) {
-                   return std::make_pair(std::string(var->name),
-                                         vk::PushConstantRange(stage, var->offset, var->size));
-                 });
-  return res;
+  uint32_t left_bound = UINT32_MAX, right_bound = 0;
+  for (const auto &push_constant_block : push_constant_blocks) {
+    left_bound = std::min(left_bound, push_constant_block->offset);
+    right_bound = std::max(right_bound, push_constant_block->offset + push_constant_block->size);
+  }
+  return vk::PushConstantRange{getStage(), left_bound, right_bound - left_bound};
 };
 
-ShaderModule ShaderModuleCache::create(const std::filesystem::path &rel_path) {
-  std::filesystem::path path = shader_path / rel_path;
+ShaderModule ShaderModuleCache::create(const std::string &name) {
+  std::filesystem::path path = shaders_path / name;
   spdlog::info("[gfx] Loading shader module from {}", path.string());
   std::ifstream f(path, std::ios::in | std::ios::binary);
   std::vector<char> code{std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()};
-  return ShaderModule(device_, ShaderCode(reinterpret_cast<uint32_t *>(code.data()),
-                                          reinterpret_cast<uint32_t *>(code.data() + code.size())));
+  return ShaderModule(device_, {reinterpret_cast<uint32_t *>(code.data()),
+                                reinterpret_cast<uint32_t *>(code.data() + code.size())});
 }
 } // namespace gfx

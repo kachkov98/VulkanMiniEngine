@@ -26,6 +26,24 @@ private:
   vk::Device device_;
 };
 
+class PipelineLayoutBuilder {
+public:
+  PipelineLayoutBuilder(PipelineLayoutCache &pipeline_layout_cache,
+                        DescriptorSetLayoutCache &descriptor_set_layout_cache)
+      : pipeline_layout_cache_(&pipeline_layout_cache),
+        descriptor_set_layout_cache_(&descriptor_set_layout_cache) {}
+
+  PipelineLayoutBuilder &shaderStage(const ShaderModule &shader_module);
+  vk::PipelineLayout build();
+
+private:
+  PipelineLayoutCache *pipeline_layout_cache_{nullptr};
+  DescriptorSetLayoutCache *descriptor_set_layout_cache_{nullptr};
+
+  DescriptorSetLayouts descriptor_set_layouts_;
+  std::vector<vk::PushConstantRange> push_constant_ranges_;
+};
+
 class PipelineCache final {
 public:
   PipelineCache() = default;
@@ -49,12 +67,8 @@ class Pipeline final {
 public:
   Pipeline() = default;
   Pipeline(vk::UniquePipeline &&pipeline, vk::PipelineLayout layout,
-           vk::PipelineBindPoint bind_point,
-           std::vector<vk::DescriptorSetLayout> &&descriptor_set_layouts,
-           std::unordered_map<std::string, vk::PushConstantRange> &&push_constant_ranges)
-      : pipeline_(std::move(pipeline)), layout_(layout), bind_point_(bind_point),
-        descriptor_set_layouts_(std::move(descriptor_set_layouts)),
-        push_constant_ranges_(std::move(push_constant_ranges)) {}
+           vk::PipelineBindPoint bind_point)
+      : pipeline_(std::move(pipeline)), layout_(layout), bind_point_(bind_point) {}
 
   vk::Pipeline get() const noexcept { return *pipeline_; }
   vk::PipelineLayout getLayout() const noexcept { return layout_; }
@@ -62,96 +76,58 @@ public:
     pipeline_.reset();
     layout_ = nullptr;
     bind_point_ = {};
-    descriptor_set_layouts_.clear();
-    push_constant_ranges_.clear();
   }
 
   void bind(vk::CommandBuffer cmd_buf) const { cmd_buf.bindPipeline(bind_point_, *pipeline_); };
 
-  void bindDesriptorSet(vk::CommandBuffer cmd_buf, uint32_t id, DescriptorSet descriptor_set,
+  void bindDesriptorSet(vk::CommandBuffer cmd_buf, uint32_t id, vk::DescriptorSet descriptor_set,
                         const vk::ArrayProxy<const uint32_t> &dynamic_offsets = {}) const {
-    assert(descriptor_set_layouts_.at(id) == descriptor_set.getLayout() &&
-           "Incompatible descriptor set layout");
-    cmd_buf.bindDescriptorSets(bind_point_, layout_, id, descriptor_set.get(), dynamic_offsets);
+    cmd_buf.bindDescriptorSets(bind_point_, layout_, id, descriptor_set, dynamic_offsets);
   };
 
   template <typename DataType>
-  void setPushConstant(vk::CommandBuffer cmd_buf, std::string name,
+  void setPushConstant(vk::CommandBuffer cmd_buf, vk::ShaderStageFlags stages, uint32_t offset,
                        const vk::ArrayProxy<const DataType> &data) const {
-    auto &push_constant_range = push_constant_ranges_.at(name);
-    assert(push_constant_range.size == data.size() * sizeof(DataType) &&
-           "Invalid push constant size");
-    cmd_buf.pushConstants(pipeline_, push_constant_range.stageFlags, push_constant_range.offset,
-                          data);
+    cmd_buf.pushConstants(layout_, stages, offset, data);
   };
 
 private:
   vk::UniquePipeline pipeline_ = {};
   vk::PipelineLayout layout_ = {};
   vk::PipelineBindPoint bind_point_ = {};
-
-  std::vector<vk::DescriptorSetLayout> descriptor_set_layouts_;
-  std::unordered_map<std::string, vk::PushConstantRange> push_constant_ranges_;
 };
 
-template <typename Key, typename Value>
-std::vector<Value> getValuesVector(const std::unordered_map<Key, Value> &map) {
-  std::vector<Value> res;
-  std::transform(map.begin(), map.end(), std::back_inserter(res),
-                 [](const std::pair<Key, Value> &p) { return p.second; });
-  return res;
-}
-
-std::vector<vk::DescriptorSetLayout>
-mergeDescriptorSetLayouts(const DescriptorSetLayouts &descriptor_set_layouts,
-                          DescriptorSetLayoutCache &descriptor_set_layout_cache);
-std::unordered_map<std::string, vk::PushConstantRange>
-mergePushConstantRanges(const PushConstantRanges &push_constant_ranges);
-
-template <typename Derived> class PipelineBuilder {
+template <typename Derived> class PipelineBuilder : public PipelineLayoutBuilder {
 public:
   PipelineBuilder(PipelineCache &pipeline_cache, PipelineLayoutCache &pipeline_layout_cache,
                   DescriptorSetLayoutCache &descriptor_set_layout_cache)
-      : pipeline_cache_(&pipeline_cache), pipeline_layout_cache_(&pipeline_layout_cache),
-        descriptor_set_layout_cache_(&descriptor_set_layout_cache) {}
+      : PipelineLayoutBuilder(pipeline_layout_cache, descriptor_set_layout_cache),
+        pipeline_cache_(&pipeline_cache) {}
 
   Derived &shaderStage(const ShaderModule &shader_module,
                        const vk::SpecializationInfo *specialization_info = nullptr) {
+    assert(shader_module.getStage() | Derived::shader_stages);
     shader_stages_.emplace_back(vk::PipelineShaderStageCreateFlags{}, shader_module.getStage(),
                                 shader_module.get(), shader_module.getName(), specialization_info);
-    const auto &descriptor_set_layouts = shader_module.getDescriptorSetLayouts();
-    descriptor_set_layouts_.insert(descriptor_set_layouts_.end(), descriptor_set_layouts.begin(),
-                                   descriptor_set_layouts.end());
-    const auto &push_constant_ranges = shader_module.getPushConstantRanges();
-    push_constant_ranges_.insert(push_constant_ranges_.end(), push_constant_ranges.begin(),
-                                 push_constant_ranges.end());
+    PipelineLayoutBuilder::shaderStage(shader_module);
     return static_cast<Derived &>(*this);
   }
 
   Pipeline build() {
-    auto descriptor_set_layouts =
-        mergeDescriptorSetLayouts(descriptor_set_layouts_, *descriptor_set_layout_cache_);
-    auto push_constant_ranges = mergePushConstantRanges(push_constant_ranges_);
-    auto push_constant_ranges_vec = getValuesVector(push_constant_ranges);
-    auto &layout =
-        *pipeline_layout_cache_->get({{}, descriptor_set_layouts, push_constant_ranges_vec});
-    return Pipeline(static_cast<Derived *>(this)->create(layout), layout, Derived::bind_point,
-                    std::move(descriptor_set_layouts), std::move(push_constant_ranges));
-  };
+    auto layout = PipelineLayoutBuilder::build();
+    return Pipeline(static_cast<Derived *>(this)->create(layout), layout, Derived::bind_point);
+  }
 
 protected:
   PipelineCache *pipeline_cache_{nullptr};
-  PipelineLayoutCache *pipeline_layout_cache_{nullptr};
-  DescriptorSetLayoutCache *descriptor_set_layout_cache_{nullptr};
 
   std::vector<vk::PipelineShaderStageCreateInfo> shader_stages_;
-  DescriptorSetLayouts descriptor_set_layouts_;
-  PushConstantRanges push_constant_ranges_;
 };
 
 class ComputePipelineBuilder final : public PipelineBuilder<ComputePipelineBuilder> {
 public:
   static constexpr vk::PipelineBindPoint bind_point = vk::PipelineBindPoint::eCompute;
+  static constexpr vk::ShaderStageFlags shader_stages = vk::ShaderStageFlagBits::eCompute;
 
   ComputePipelineBuilder(PipelineCache &pipeline_cache, PipelineLayoutCache &pipeline_layout_cache,
                          DescriptorSetLayoutCache &descriptor_set_layout_cache)
@@ -163,6 +139,7 @@ public:
 class GraphicsPipelineBuilder final : public PipelineBuilder<GraphicsPipelineBuilder> {
 public:
   static constexpr vk::PipelineBindPoint bind_point = vk::PipelineBindPoint::eGraphics;
+  static constexpr vk::ShaderStageFlags shader_stages = vk::ShaderStageFlagBits::eAllGraphics;
 
   GraphicsPipelineBuilder(PipelineCache &pipeline_cache, PipelineLayoutCache &pipeline_layout_cache,
                           DescriptorSetLayoutCache &descriptor_set_layout_cache)
@@ -170,16 +147,24 @@ public:
 
   vk::UniquePipeline create(vk::PipelineLayout pipeline_layout);
 
-  GraphicsPipelineBuilder &
-  inputAssembly(vk::PrimitiveTopology topology = vk::PrimitiveTopology::ePointList,
-                bool restart_enable = {}) {
-    topology_ = topology;
-    restart_enable_ = restart_enable;
+  GraphicsPipelineBuilder &vertexBinding(const vk::VertexInputBindingDescription &binding) {
+    vertex_bindings_.push_back(binding);
+    return *this;
+  }
+  GraphicsPipelineBuilder &vertexAttribute(const vk::VertexInputAttributeDescription &attribute) {
+    vertex_attributes_.push_back(attribute);
     return *this;
   }
 
-  GraphicsPipelineBuilder &tesselation(uint32_t patch_control_points = {}) {
-    patch_control_points_ = patch_control_points;
+  GraphicsPipelineBuilder &
+  inputAssembly(const vk::PipelineInputAssemblyStateCreateInfo &input_assembly_state) {
+    input_assembly_state_ = input_assembly_state;
+    return *this;
+  }
+
+  GraphicsPipelineBuilder &
+  tesselation(const vk::PipelineTessellationStateCreateInfo &tesselation_state) {
+    tesselation_state_ = tesselation_state;
     return *this;
   }
 
@@ -192,54 +177,21 @@ public:
     return *this;
   }
 
-  GraphicsPipelineBuilder &rasterization(
-      bool depth_clamp_enable = {}, bool rasterizer_discard_enable = {},
-      vk::PolygonMode polygon_mode = vk::PolygonMode::eFill, vk::CullModeFlags cull_mode = {},
-      vk::FrontFace front_face = vk::FrontFace::eCounterClockwise, bool depth_bias_enable = {},
-      float depth_bias_constant_factor = {}, float depth_bias_clamp = {},
-      float depth_bias_slope_factor = {}, float line_width = {}) {
-    depth_clamp_enable_ = depth_clamp_enable;
-    rasterizer_discard_enable_ = rasterizer_discard_enable;
-    polygon_mode_ = polygon_mode;
-    cull_mode_ = cull_mode;
-    front_face_ = front_face;
-    depth_bias_enable_ = depth_bias_enable;
-    depth_bias_constant_factor_ = depth_bias_constant_factor;
-    depth_bias_clamp_ = depth_bias_clamp;
-    depth_bias_slope_factor_ = depth_bias_slope_factor;
-    line_width_ = line_width;
+  GraphicsPipelineBuilder &
+  rasterization(const vk::PipelineRasterizationStateCreateInfo &rasterization_state) {
+    rasterization_state_ = rasterization_state;
     return *this;
   }
 
   GraphicsPipelineBuilder &
-  multisample(vk::SampleCountFlagBits rasterization_samples = vk::SampleCountFlagBits::e1,
-              bool sample_shading_enable = {}, float min_sample_shading = {},
-              const vk::SampleMask *sample_mask = {}, bool alpha_to_coverage_enable = {},
-              bool alpha_to_one_enable = {}) {
-    rasterization_samples_ = rasterization_samples;
-    sample_shading_enable_ = sample_shading_enable;
-    min_sample_shading_ = min_sample_shading;
-    sample_mask_ = sample_mask;
-    alpha_to_coverage_enable_ = alpha_to_coverage_enable;
-    alpha_to_one_enable_ = alpha_to_one_enable;
+  multisample(const vk::PipelineMultisampleStateCreateInfo &multisample_state) {
+    multisample_state_ = multisample_state;
     return *this;
   }
 
-  GraphicsPipelineBuilder &depthStencil(bool depth_test_enable = {}, bool depth_write_enable = {},
-                                        vk::CompareOp depth_compare_op = vk::CompareOp::eNever,
-                                        bool depth_bounds_test_enable = {},
-                                        bool stencil_test_enable = {},
-                                        vk::StencilOpState front = {}, vk::StencilOpState back = {},
-                                        float min_depth_bounds = {}, float max_depth_bounds = {}) {
-    depth_test_enable_ = depth_test_enable;
-    depth_write_enable_ = depth_write_enable;
-    depth_compare_op_ = depth_compare_op;
-    depth_bounds_test_enable_ = depth_bounds_test_enable;
-    stencil_test_enable_ = stencil_test_enable;
-    front_ = front;
-    back_ = back;
-    min_depth_bounds_ = min_depth_bounds;
-    max_depth_bounds_ = max_depth_bounds;
+  GraphicsPipelineBuilder &
+  depthStencil(const vk::PipelineDepthStencilStateCreateInfo &depth_stencil_state) {
+    depth_stencil_state_ = depth_stencil_state;
     return *this;
   }
 
@@ -274,41 +226,18 @@ public:
   }
 
 private:
-  vk::PrimitiveTopology topology_ = vk::PrimitiveTopology::ePointList;
-  bool restart_enable_ = {};
+  std::vector<vk::VertexInputBindingDescription> vertex_bindings_;
+  std::vector<vk::VertexInputAttributeDescription> vertex_attributes_;
 
-  uint32_t patch_control_points_ = {};
+  vk::PipelineInputAssemblyStateCreateInfo input_assembly_state_ = {};
+  vk::PipelineTessellationStateCreateInfo tesselation_state_ = {};
 
   std::vector<vk::Viewport> viewports_;
   std::vector<vk::Rect2D> scissors_;
 
-  bool depth_clamp_enable_ = {};
-  bool rasterizer_discard_enable_ = {};
-  vk::PolygonMode polygon_mode_ = vk::PolygonMode::eFill;
-  vk::CullModeFlags cull_mode_ = {};
-  vk::FrontFace front_face_ = vk::FrontFace::eCounterClockwise;
-  bool depth_bias_enable_ = {};
-  float depth_bias_constant_factor_ = {};
-  float depth_bias_clamp_ = {};
-  float depth_bias_slope_factor_ = {};
-  float line_width_ = {};
-
-  vk::SampleCountFlagBits rasterization_samples_ = vk::SampleCountFlagBits::e1;
-  bool sample_shading_enable_ = {};
-  float min_sample_shading_ = {};
-  const vk::SampleMask *sample_mask_ = {};
-  bool alpha_to_coverage_enable_ = {};
-  bool alpha_to_one_enable_ = {};
-
-  bool depth_test_enable_ = {};
-  bool depth_write_enable_ = {};
-  vk::CompareOp depth_compare_op_ = vk::CompareOp::eNever;
-  bool depth_bounds_test_enable_ = {};
-  bool stencil_test_enable_ = {};
-  vk::StencilOpState front_ = {};
-  vk::StencilOpState back_ = {};
-  float min_depth_bounds_ = {};
-  float max_depth_bounds_ = {};
+  vk::PipelineRasterizationStateCreateInfo rasterization_state_ = {};
+  vk::PipelineMultisampleStateCreateInfo multisample_state_ = {};
+  vk::PipelineDepthStencilStateCreateInfo depth_stencil_state_ = {};
 
   bool logic_op_enable_ = {};
   vk::LogicOp logic_op_ = vk::LogicOp::eClear;
