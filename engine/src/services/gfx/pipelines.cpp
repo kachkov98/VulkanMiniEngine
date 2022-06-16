@@ -69,6 +69,18 @@ void PipelineCache::save() const {
   std::copy(data.begin(), data.end(), std::ostreambuf_iterator<char>(f));
 }
 
+static vk::UniquePipeline getPipelineResult(vk::ResultValue<vk::UniquePipeline>&& result) {
+  assert(result.result == vk::Result::eSuccess);
+  return std::move(result.value);
+}
+
+vk::UniquePipeline PipelineCache::create(const vk::ComputePipelineCreateInfo &create_info) const {
+  return getPipelineResult(device_.createComputePipelineUnique(*pipeline_cache_, create_info));
+}
+vk::UniquePipeline PipelineCache::create(const vk::GraphicsPipelineCreateInfo &create_info) const {
+  return getPipelineResult(device_.createGraphicsPipelineUnique(*pipeline_cache_, create_info));
+}
+
 vk::UniquePipeline ComputePipelineBuilder::create(vk::PipelineLayout pipeline_layout) {
   return pipeline_cache_->create(
       vk::ComputePipelineCreateInfo{{}, shader_stages_.front(), pipeline_layout});

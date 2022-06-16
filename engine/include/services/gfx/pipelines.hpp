@@ -51,12 +51,8 @@ public:
 
   void save() const;
 
-  vk::UniquePipeline create(const vk::ComputePipelineCreateInfo &create_info) const {
-    return device_.createComputePipelineUnique(*pipeline_cache_, create_info);
-  }
-  vk::UniquePipeline create(const vk::GraphicsPipelineCreateInfo &create_info) const {
-    return device_.createGraphicsPipelineUnique(*pipeline_cache_, create_info);
-  }
+  vk::UniquePipeline create(const vk::ComputePipelineCreateInfo &create_info) const;
+  vk::UniquePipeline create(const vk::GraphicsPipelineCreateInfo &create_info) const;
 
 private:
   vk::Device device_ = {};
