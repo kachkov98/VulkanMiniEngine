@@ -16,6 +16,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev libtbb-dev
+          sudo update-alternatives --set gcc /usr/bin/gcc-10
         if: runner.os == 'Linux'
 
       - uses: actions/checkout@v2
