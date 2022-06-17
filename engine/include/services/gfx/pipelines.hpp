@@ -8,6 +8,8 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_hash.hpp>
 
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace gfx {
@@ -102,9 +104,10 @@ public:
 
   Derived &shaderStage(const ShaderModule &shader_module,
                        const vk::SpecializationInfo *specialization_info = nullptr) {
-    assert(shader_module.getStage() | Derived::shader_stages);
-    shader_stages_.emplace_back(vk::PipelineShaderStageCreateFlags{}, shader_module.getStage(),
-                                shader_module.get(), shader_module.getName(), specialization_info);
+    auto stage = shader_module.getStage();
+    assert(stage | Derived::shader_stages);
+    shader_stages_.try_emplace(stage, vk::PipelineShaderStageCreateFlags{}, stage,
+                               shader_module.get(), shader_module.getName(), specialization_info);
     PipelineLayoutBuilder::shaderStage(shader_module);
     return static_cast<Derived &>(*this);
   }
@@ -117,7 +120,7 @@ public:
 protected:
   PipelineCache *pipeline_cache_{nullptr};
 
-  std::vector<vk::PipelineShaderStageCreateInfo> shader_stages_;
+  std::unordered_map<vk::ShaderStageFlagBits, vk::PipelineShaderStageCreateInfo> shader_stages_;
 };
 
 class ComputePipelineBuilder final : public PipelineBuilder<ComputePipelineBuilder> {
@@ -201,7 +204,7 @@ public:
   }
 
   GraphicsPipelineBuilder &dynamicState(vk::DynamicState dynamic_state) {
-    dynamic_states_.push_back(dynamic_state);
+    dynamic_states_.insert(dynamic_state);
     return *this;
   };
 
@@ -240,7 +243,7 @@ private:
   std::vector<vk::PipelineColorBlendAttachmentState> blend_states_;
   std::array<float, 4> blend_constants_ = {};
 
-  std::vector<vk::DynamicState> dynamic_states_;
+  std::unordered_set<vk::DynamicState> dynamic_states_;
 
   std::vector<vk::Format> color_attachments_;
   vk::Format depth_attachment_ = vk::Format::eUndefined;

@@ -62,8 +62,8 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 #endif
 
 Frame::Frame(vk::PhysicalDevice physical_device, vk::Device device, vk::Queue queue,
-             uint32_t queue_family_index, vma::Allocator allocator)
-    : device_(device), queue_(queue), allocator_(allocator) {
+             uint32_t queue_family_index)
+    : device_(device), queue_(queue) {
   image_available_ = device_.createSemaphoreUnique({});
   render_finished_ = device_.createSemaphoreUnique({});
   render_fence_ = device_.createFenceUnique({vk::FenceCreateFlagBits::eSignaled});
@@ -73,8 +73,6 @@ Frame::Frame(vk::PhysicalDevice physical_device, vk::Device device, vk::Queue qu
       device_.allocateCommandBuffersUnique({*command_pool_, vk::CommandBufferLevel::ePrimary, 1})
           .front());
   tracy_vk_ctx_ = UniqueTracyVkCtx(physical_device, device, queue, *command_buffer_);
-  memory_pool_ = allocator_.createPoolUnique(
-      {/*memory type index*/ 0, VMA_POOL_CREATE_LINEAR_ALGORITHM_BIT, 0, 0, 0, 1.0f, 0, nullptr});
 }
 
 void Frame::submit() const {
@@ -91,7 +89,7 @@ void Frame::reset() const {
   command_buffer_->reset({});
 }
 
-Context::Context(const wsi::Window &window) : window_(&window) {
+Context::Context(const wsi::Window &window) {
   // Create instance
   {
     VULKAN_HPP_DEFAULT_DISPATCHER.init(glfwGetInstanceProcAddress);
@@ -146,7 +144,7 @@ Context::Context(const wsi::Window &window) : window_(&window) {
   // Create surface
   {
     VkSurfaceKHR surface;
-    if (glfwCreateWindowSurface(*instance_, window_->getHandle(), nullptr, &surface) != VK_SUCCESS)
+    if (glfwCreateWindowSurface(*instance_, window.getHandle(), nullptr, &surface) != VK_SUCCESS)
       throw std::runtime_error("glfwCreateWindowSurface failed");
     surface_ = vk::UniqueSurfaceKHR(surface, *instance_);
     surface_format_ =
@@ -179,7 +177,7 @@ Context::Context(const wsi::Window &window) : window_(&window) {
     VULKAN_HPP_DEFAULT_DISPATCHER.init(*device_);
   }
   // Create swapchain
-  recreateSwapchain();
+  recreateSwapchain(window.getFramebufferSize());
   // Create resource caches
   descriptor_set_layout_cache_ = DescriptorSetLayoutCache(*device_);
   shader_module_cache_ = ShaderModuleCache(*device_);
@@ -205,37 +203,17 @@ Context::Context(const wsi::Window &window) : window_(&window) {
   }
   // Create in-flight frames
   for (auto &frame : frames_)
-    frame =
-        Frame(physical_device_, *device_, getMainQueue(), main_queue_family_index_, *allocator_);
+    frame = Frame(physical_device_, *device_, getMainQueue(), main_queue_family_index_);
 }
 
-bool Context::isExtensionEnabled(std::string_view name) const noexcept {
-  return std::find(enabled_extensions_.begin(), enabled_extensions_.end(), name) !=
-         enabled_extensions_.end();
-}
-
-bool Context::acquireNextImage(vk::Semaphore image_available) {
-  ZoneScopedN("acquireNextImage");
-  return checkSwapchainResult(device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, image_available,
-                                                           {}, &current_swapchain_image_));
-}
-
-bool Context::presentImage(vk::Semaphore render_finished) {
-  ZoneScopedN("presentImage");
-  auto present_info =
-      vk::PresentInfoKHR{1, &render_finished, 1, &*swapchain_, &current_swapchain_image_};
-  return checkSwapchainResult(getMainQueue().presentKHR(&present_info));
-}
-
-void Context::recreateSwapchain() {
-  auto current_extent = window_->getFramebufferSize();
-  if (!current_extent.x || !current_extent.y)
+void Context::recreateSwapchain(glm::uvec2 new_extent) {
+  if (!new_extent.x || !new_extent.y)
     return;
   auto surface_capabilities = physical_device_.getSurfaceCapabilitiesKHR(*surface_);
   swapchain_extent_ =
-      vk::Extent2D{std::clamp(current_extent.x, surface_capabilities.minImageExtent.width,
+      vk::Extent2D{std::clamp(new_extent.x, surface_capabilities.minImageExtent.width,
                               surface_capabilities.maxImageExtent.width),
-                   std::clamp(current_extent.y, surface_capabilities.minImageExtent.height,
+                   std::clamp(new_extent.y, surface_capabilities.minImageExtent.height,
                               surface_capabilities.maxImageExtent.height)};
   num_swapchain_images_ = std::max(num_swapchain_images_, surface_capabilities.minImageCount);
   if (surface_capabilities.maxImageCount)
@@ -272,17 +250,23 @@ void Context::recreateSwapchain() {
   spdlog::info("[gfx] Swapchain extent: {}x{}", swapchain_extent_.width, swapchain_extent_.height);
 }
 
-bool Context::checkSwapchainResult(vk::Result result) {
-  switch (result) {
-  case vk::Result::eSuccess:
-    return true;
-  case vk::Result::eErrorOutOfDateKHR:
-  case vk::Result::eSuboptimalKHR:
-    waitIdle();
-    recreateSwapchain();
-    return false;
-  default:
-    vk::throwResultException(result, "checkSwapchainResult");
-  }
+bool Context::isExtensionEnabled(std::string_view name) const noexcept {
+  return std::find(enabled_extensions_.begin(), enabled_extensions_.end(), name) !=
+         enabled_extensions_.end();
+}
+
+void Context::acquireNextImage(vk::Semaphore image_available) {
+  ZoneScopedN("acquireNextImage");
+  auto [res, index] = device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, image_available, {});
+  current_swapchain_image_ = index;
+  if (res != vk::Result::eSuccess)
+    spdlog::warn("[gfx] acquireNextImage - {}", vk::to_string(res));
+}
+
+void Context::presentImage(vk::Semaphore render_finished) {
+  ZoneScopedN("presentImage");
+  auto res = getMainQueue().presentKHR({render_finished, *swapchain_, current_swapchain_image_});
+  if (res != vk::Result::eSuccess)
+    spdlog::warn("[gfx] presentImage - {}", vk::to_string(res));
 }
 } // namespace gfx

@@ -29,20 +29,18 @@ protected:
   unsigned id_, ref_count_{0};
 };
 
-enum class PassType { Graphics, Compute, Present };
-
 class ResourceNode;
 
 class PassNode : public Node {
 public:
-  PassType getPassType() const noexcept { return pass_type_; }
+  vk::PipelineStageFlagBits2 getStage() const noexcept { return stage_; }
   bool hasSideEffects() const noexcept { return has_side_effects_; }
 
 protected:
   virtual void setup() = 0;
   virtual void execute() = 0;
 
-  PassType pass_type_;
+  vk::PipelineStageFlagBits2 stage_;
   bool has_side_effects_{false};
   std::vector<const ResourceNode *> creates_;
   std::vector<const ResourceNode *> reads_;
@@ -87,6 +85,11 @@ public:
   void execute(gfx::Frame &frame);
 
   void dump(std::ostream &os) const;
+
+  void reset() {
+    passes_.clear();
+    resources_.clear();
+  }
 
 private:
   std::vector<std::unique_ptr<PassNode>> passes_;

@@ -1,7 +1,6 @@
 #ifndef ENGINE_HPP
 #define ENGINE_HPP
 
-#include <Tracy.hpp>
 #include <entt/locator/locator.hpp>
 
 #include <string>
@@ -14,9 +13,7 @@ struct Version {
 
 class Application {
 public:
-  Application(const std::string &name, const Version &version) : name_(name), version_(version) {
-    TracyAppInfo(name.c_str(), name.size());
-  }
+  Application(const std::string &name, const Version &version);
 
   const std::string &getName() const noexcept { return name_; }
   const Version &getVersion() const noexcept { return version_; }

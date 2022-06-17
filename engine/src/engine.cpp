@@ -5,6 +5,8 @@
 #include "services/wsi/window.hpp"
 
 #include <GLFW/glfw3.h>
+#include <Tracy.hpp>
+#include <imgui.h>
 #include <spdlog/spdlog.h>
 #include <taskflow/taskflow.hpp>
 
@@ -16,6 +18,11 @@ using Executor = entt::locator<tf::Executor>;
 using Window = entt::locator<wsi::Window>;
 using Input = entt::locator<wsi::Input>;
 using Context = entt::locator<gfx::Context>;
+
+Application::Application(const std::string &name, const Version &version)
+    : name_(name), version_(version) {
+  TracyAppInfo(name.c_str(), name.size());
+}
 
 void Application::run(unsigned update_freq) {
   const double delta = 1. / update_freq;
@@ -60,6 +67,10 @@ void Engine::init() {
   if (!glfwInit())
     throw std::runtime_error("Failed to initialize GLFW");
   spdlog::info("GLFW intialized successfully");
+  // ImGui
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  spdlog::info("ImGui initialized successfully");
   // Window
   Window::emplace("VulkanMiniEngine");
   spdlog::info("Window created successfully");
@@ -83,6 +94,7 @@ void Engine::terminate() {
   Context::reset();
   Input::reset();
   Window::reset();
+  ImGui::DestroyContext();
   glfwTerminate();
   spdlog::info("Engine terminated successfully");
 }

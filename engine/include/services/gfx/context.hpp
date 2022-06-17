@@ -6,6 +6,7 @@
 #include "pipelines.hpp"
 #include "shaders.hpp"
 
+#include <glm/vec2.hpp>
 #include <vulkan/vulkan.hpp>
 
 #include <TracyVulkan.hpp>
@@ -65,7 +66,7 @@ class Frame final {
 public:
   Frame() = default;
   Frame(vk::PhysicalDevice physical_device, vk::Device device, vk::Queue queue,
-        uint32_t queue_family_index, vma::Allocator allocator);
+        uint32_t queue_family_index);
 
   void submit() const;
   void reset() const;
@@ -74,18 +75,15 @@ public:
   vk::Semaphore getRenderFinishedSemaphore() const noexcept { return *render_finished_; }
   vk::CommandPool getCommandPool() const noexcept { return *command_pool_; }
   vk::CommandBuffer getCommandBuffer() const noexcept { return *command_buffer_; }
-  vma::Pool getMemoryPool() const noexcept { return *memory_pool_; }
   TracyVkCtx getTracyVkCtx() const noexcept { return *tracy_vk_ctx_; }
 
 private:
   vk::Device device_ = {};
   vk::Queue queue_ = {};
-  vma::Allocator allocator_ = {};
   vk::UniqueSemaphore image_available_ = {}, render_finished_ = {};
   vk::UniqueFence render_fence_ = {};
   vk::UniqueCommandPool command_pool_ = {};
   vk::UniqueCommandBuffer command_buffer_ = {};
-  vma::UniquePool memory_pool_ = {};
   UniqueTracyVkCtx tracy_vk_ctx_ = {};
 };
 
@@ -105,13 +103,14 @@ public:
   vk::Queue getMainQueue() const noexcept { return device_->getQueue(main_queue_family_index_, 0); }
   uint32_t getMainQueueFamilyIndex() const noexcept { return main_queue_family_index_; }
 
+  void recreateSwapchain(glm::uvec2 new_extent);
   vk::Image getCurrentImage() const noexcept { return swapchain_images_[current_swapchain_image_]; }
   vk::ImageView getCurrentImageView() const noexcept {
     return *swapchain_image_views_[current_swapchain_image_];
   }
   vk::Extent2D getSwapchainExtent() const noexcept { return swapchain_extent_; };
-  bool acquireNextImage(vk::Semaphore image_available);
-  bool presentImage(vk::Semaphore render_finished);
+  void acquireNextImage(vk::Semaphore image_available);
+  void presentImage(vk::Semaphore render_finished);
 
   ShaderModuleCache &getShaderModuleCache() noexcept { return shader_module_cache_; }
   DescriptorSetLayoutCache &getDescriptorSetLayoutCache() noexcept {
@@ -128,7 +127,6 @@ public:
   void waitIdle() const noexcept { device_->waitIdle(); }
 
 private:
-  const wsi::Window *window_ = nullptr;
   vk::UniqueInstance instance_ = {};
 #ifndef NDEBUG
   vk::UniqueDebugUtilsMessengerEXT messenger_ = {};
@@ -157,9 +155,6 @@ private:
 
   uint32_t current_frame_ = 0;
   std::array<Frame, frames_in_flight> frames_;
-
-  void recreateSwapchain();
-  bool checkSwapchainResult(vk::Result result);
 };
 } // namespace gfx
 
