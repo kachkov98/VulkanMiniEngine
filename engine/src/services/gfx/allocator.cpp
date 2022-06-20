@@ -47,6 +47,12 @@ Allocator::createAllocationUnique(const vk::MemoryRequirements &memory_requireme
                           ObjectDestroy<Allocator>(*this));
 }
 
+VmaAllocationInfo Allocator::getAllocationInfo(Allocation allocation) const noexcept {
+  VmaAllocationInfo allocation_info;
+  vmaGetAllocationInfo(*this, allocation, &allocation_info);
+  return allocation_info;
+}
+
 void Allocator::bindBufferMemory(Allocation allocation, vk::Buffer buffer) {
   VMA_CHECK(vmaBindBufferMemory, *this, allocation, buffer);
 }
@@ -65,16 +71,16 @@ void Allocator::unmapMemory(Allocation allocation) noexcept { vmaUnmapMemory(*th
 
 void Allocator::destroy(Allocation allocation) noexcept { vmaFreeMemory(*this, allocation); };
 
-Buffer Allocator::createBuffer(vk::BufferCreateInfo &buffer_info,
-                               AllocationCreateInfo &alloc_info) {
+Buffer Allocator::createBuffer(const vk::BufferCreateInfo &buffer_info,
+                               const AllocationCreateInfo &alloc_info) {
   VkBuffer buffer;
   VmaAllocation allocation;
   VMA_CHECK(vmaCreateBuffer, *this, reinterpret_cast<const VkBufferCreateInfo *>(&buffer_info),
             &alloc_info, &buffer, &allocation, nullptr);
   return Buffer(buffer, allocation);
 }
-UniqueBuffer Allocator::createBufferUnique(vk::BufferCreateInfo &buffer_info,
-                                           AllocationCreateInfo &alloc_info) {
+UniqueBuffer Allocator::createBufferUnique(const vk::BufferCreateInfo &buffer_info,
+                                           const AllocationCreateInfo &alloc_info) {
   return UniqueBuffer(createBuffer(buffer_info, alloc_info), ObjectDestroy<Allocator>(*this));
 }
 
@@ -83,7 +89,7 @@ void Allocator::destroy(Buffer buffer) noexcept {
 }
 
 vk::Buffer Allocator::createAliasingBuffer(Allocation allocation,
-                                           vk::BufferCreateInfo &buffer_info) {
+                                           const vk::BufferCreateInfo &buffer_info) {
   VkBuffer buffer;
   VMA_CHECK(vmaCreateAliasingBuffer, *this, allocation,
             reinterpret_cast<const VkBufferCreateInfo *>(&buffer_info), &buffer);
@@ -91,13 +97,13 @@ vk::Buffer Allocator::createAliasingBuffer(Allocation allocation,
 }
 
 vk::UniqueBuffer Allocator::createAliasingBufferUnique(Allocation allocation,
-                                                       vk::BufferCreateInfo &buffer_info) {
+                                                       const vk::BufferCreateInfo &buffer_info) {
   return vk::UniqueBuffer(
       createAliasingBuffer(allocation, buffer_info),
       vk::ObjectDestroy<vk::Device, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE>(getInfo().device));
 }
 
-Image Allocator::createImage(vk::ImageCreateInfo &image_info, AllocationCreateInfo &alloc_info) {
+Image Allocator::createImage(const vk::ImageCreateInfo &image_info, const AllocationCreateInfo &alloc_info) {
   VkImage image;
   VmaAllocation allocation;
   VMA_CHECK(vmaCreateImage, *this, reinterpret_cast<const VkImageCreateInfo *>(&image_info),
@@ -105,8 +111,8 @@ Image Allocator::createImage(vk::ImageCreateInfo &image_info, AllocationCreateIn
   return Image(image, allocation);
 }
 
-UniqueImage Allocator::createImageUnique(vk::ImageCreateInfo &image_info,
-                                         AllocationCreateInfo &alloc_info) {
+UniqueImage Allocator::createImageUnique(const vk::ImageCreateInfo &image_info,
+                                         const AllocationCreateInfo &alloc_info) {
   return UniqueImage(createImage(image_info, alloc_info), ObjectDestroy<Allocator>(*this));
 }
 
@@ -114,7 +120,7 @@ void Allocator::destroy(Image image) noexcept {
   vmaDestroyImage(*this, image.getImage(), image.getAllocation());
 }
 
-vk::Image Allocator::createAliasingImage(Allocation allocation, vk::ImageCreateInfo &image_info) {
+vk::Image Allocator::createAliasingImage(Allocation allocation, const vk::ImageCreateInfo &image_info) {
   VkImage image;
   VMA_CHECK(vmaCreateAliasingImage, *this, allocation,
             reinterpret_cast<const VkImageCreateInfo *>(&image_info), &image);
@@ -122,7 +128,7 @@ vk::Image Allocator::createAliasingImage(Allocation allocation, vk::ImageCreateI
 }
 
 vk::UniqueImage Allocator::createAliasingImageUnique(Allocation allocation,
-                                                     vk::ImageCreateInfo &image_info) {
+                                                     const vk::ImageCreateInfo &image_info) {
   return vk::UniqueImage(
       createAliasingImage(allocation, image_info),
       vk::ObjectDestroy<vk::Device, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE>(getInfo().device));

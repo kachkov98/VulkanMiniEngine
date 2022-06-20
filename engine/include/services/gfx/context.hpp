@@ -5,6 +5,7 @@
 #include "descriptors.hpp"
 #include "pipelines.hpp"
 #include "shaders.hpp"
+#include "staging_buffer.hpp"
 
 #include <glm/vec2.hpp>
 #include <vulkan/vulkan.hpp>
@@ -121,6 +122,8 @@ public:
 
   vma::Allocator getAllocator() const noexcept { return *allocator_; }
 
+  StagingBuffer &getStagingBuffer() noexcept { return staging_buffer_; }
+
   Frame &getCurrentFrame() noexcept { return frames_[current_frame_ % frames_in_flight]; }
   void nextFrame() noexcept { allocator_->setCurrentFrameIndex(++current_frame_); }
 
@@ -152,6 +155,8 @@ private:
   PipelineCache pipeline_cache_;
 
   vma::UniqueAllocator allocator_ = {};
+
+  StagingBuffer staging_buffer_ = {};
 
   uint32_t current_frame_ = 0;
   std::array<Frame, frames_in_flight> frames_;

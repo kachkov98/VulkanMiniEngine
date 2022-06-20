@@ -10,6 +10,7 @@ target_sources(engine
     "src/services/gfx/descriptors.cpp"
     "src/services/gfx/pipelines.cpp"
     "src/services/gfx/shaders.cpp"
+    "src/services/gfx/staging_buffer.cpp"
     "src/renderer/render_graph.cpp")
 
 target_include_directories(engine

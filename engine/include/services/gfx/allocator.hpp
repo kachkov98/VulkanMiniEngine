@@ -107,6 +107,8 @@ public:
   operator VmaAllocation() const noexcept { return allocation_; }
   explicit operator bool() const noexcept { return allocation_ != VK_NULL_HANDLE; }
   bool operator!() const noexcept { return allocation_ == VK_NULL_HANDLE; }
+  bool operator==(const Allocation &rhs) const noexcept { return allocation_ == rhs.allocation_; }
+  bool operator!=(const Allocation &rhs) const noexcept { return allocation_ != rhs.allocation_; }
 
 private:
   VmaAllocation allocation_ = {};
@@ -132,6 +134,10 @@ public:
   Allocation getAllocation() const noexcept { return allocation_; }
   explicit operator bool() const noexcept { return buffer_ && allocation_; }
   bool operator!() const noexcept { return !buffer_ && !allocation_; }
+  bool operator==(const Buffer &rhs) const noexcept {
+    return buffer_ == rhs.buffer_ && allocation_ == rhs.allocation_;
+  }
+  bool operator!=(const Buffer &rhs) const noexcept { return !(*this == rhs); }
 
 private:
   vk::Buffer buffer_ = {};
@@ -157,6 +163,10 @@ public:
   Allocation getAllocation() const noexcept { return allocation_; }
   explicit operator bool() const noexcept { return image_ && allocation_; }
   bool operator!() const noexcept { return !image_ && !allocation_; }
+  bool operator==(const Image &rhs) const noexcept {
+    return image_ == rhs.image_ && allocation_ == rhs.allocation_;
+  }
+  bool operator!=(const Image &rhs) const noexcept { return !(*this == rhs); }
 
 private:
   vk::Image image_ = {};
@@ -188,6 +198,8 @@ public:
   operator VmaPool() const noexcept { return pool_; }
   explicit operator bool() const noexcept { return pool_ != VK_NULL_HANDLE; }
   bool operator!() const noexcept { return pool_ == VK_NULL_HANDLE; }
+  bool operator==(const Pool &rhs) const noexcept { return pool_ == rhs.pool_; }
+  bool operator!=(const Pool &rhs) const noexcept { return pool_ != rhs.pool_; }
 
 private:
   VmaPool pool_ = {};
@@ -226,27 +238,31 @@ public:
                               const AllocationCreateInfo &alloc_info);
   UniqueAllocation createAllocationUnique(const vk::MemoryRequirements &memory_requirements,
                                           const AllocationCreateInfo &alloc_info);
+  VmaAllocationInfo getAllocationInfo(Allocation allocation) const noexcept;
   void bindBufferMemory(Allocation allocation, vk::Buffer buffer);
   void bindImageMemory(Allocation allocation, vk::Image image);
   void *mapMemory(Allocation allocation);
   void unmapMemory(Allocation allocation) noexcept;
   void destroy(Allocation allocation) noexcept;
 
-  Buffer createBuffer(vk::BufferCreateInfo &buffer_info, AllocationCreateInfo &alloc_info);
-  UniqueBuffer createBufferUnique(vk::BufferCreateInfo &buffer_info,
-                                  AllocationCreateInfo &alloc_info);
+  Buffer createBuffer(const vk::BufferCreateInfo &buffer_info,
+                      const AllocationCreateInfo &alloc_info);
+  UniqueBuffer createBufferUnique(const vk::BufferCreateInfo &buffer_info,
+                                  const AllocationCreateInfo &alloc_info);
   void destroy(Buffer buffer) noexcept;
 
-  vk::Buffer createAliasingBuffer(Allocation allocation, vk::BufferCreateInfo &buffer_info);
+  vk::Buffer createAliasingBuffer(Allocation allocation, const vk::BufferCreateInfo &buffer_info);
   vk::UniqueBuffer createAliasingBufferUnique(Allocation allocation,
-                                              vk::BufferCreateInfo &buffer_info);
+                                              const vk::BufferCreateInfo &buffer_info);
 
-  Image createImage(vk::ImageCreateInfo &image_info, AllocationCreateInfo &alloc_info);
-  UniqueImage createImageUnique(vk::ImageCreateInfo &image_info, AllocationCreateInfo &alloc_info);
+  Image createImage(const vk::ImageCreateInfo &image_info, const AllocationCreateInfo &alloc_info);
+  UniqueImage createImageUnique(const vk::ImageCreateInfo &image_info,
+                                const AllocationCreateInfo &alloc_info);
   void destroy(Image image) noexcept;
 
-  vk::Image createAliasingImage(Allocation allocation, vk::ImageCreateInfo &image_info);
-  vk::UniqueImage createAliasingImageUnique(Allocation allocation, vk::ImageCreateInfo &image_info);
+  vk::Image createAliasingImage(Allocation allocation, const vk::ImageCreateInfo &image_info);
+  vk::UniqueImage createAliasingImageUnique(Allocation allocation,
+                                            const vk::ImageCreateInfo &image_info);
 
   Pool createPool(const PoolCreateInfo &pool_info);
   UniquePool createPoolUnique(const PoolCreateInfo &pool_info);

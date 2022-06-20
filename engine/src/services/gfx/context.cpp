@@ -76,17 +76,17 @@ Frame::Frame(vk::PhysicalDevice physical_device, vk::Device device, vk::Queue qu
 }
 
 void Frame::submit() const {
-  vk::PipelineStageFlags wait_stage_mask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-  vk::SubmitInfo submit_info{*image_available_, wait_stage_mask, *command_buffer_,
-                             *render_finished_};
-  queue_.submit(submit_info, *render_fence_);
+  vk::PipelineStageFlags wait_stage_mask = vk::PipelineStageFlagBits::eAllCommands;
+  queue_.submit(
+      vk::SubmitInfo{*image_available_, wait_stage_mask, *command_buffer_, *render_finished_},
+      *render_fence_);
 }
 
 void Frame::reset() const {
-  if (device_.waitForFences({*render_fence_}, VK_TRUE, UINT64_MAX) == vk::Result::eTimeout)
-    throw std::runtime_error("Unexpected fence timeout");
+  if (device_.waitForFences(*render_fence_, VK_TRUE, UINT64_MAX) == vk::Result::eTimeout)
+    throw std::runtime_error("Unexpected render fence timeout");
   device_.resetFences({*render_fence_});
-  command_buffer_->reset({});
+  device_.resetCommandPool(*command_pool_);
 }
 
 Context::Context(const wsi::Window &window) {
@@ -201,6 +201,9 @@ Context::Context(const wsi::Window &window) {
     allocator_ = vma::createAllocatorUnique(create_info);
     allocator_->setCurrentFrameIndex(current_frame_);
   }
+  // Create staging buffer
+  staging_buffer_ =
+      std::move(StagingBuffer(*device_, getMainQueue(), main_queue_family_index_, *allocator_));
   // Create in-flight frames
   for (auto &frame : frames_)
     frame = Frame(physical_device_, *device_, getMainQueue(), main_queue_family_index_);
