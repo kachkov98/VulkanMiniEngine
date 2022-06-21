@@ -5,23 +5,20 @@
     "cxxopts",
     "entt",
     "glfw3",
-    "gli",
     "glm",
     {
       "name": "imgui",
       "features": [ "glfw-binding" ]
     },
     "imguizmo",
+    "ktx",
     "nlohmann-json",
     "spdlog",
     "spirv-reflect",
     "stb",
     "taskflow",
     "tinygltf",
-    {
-      "name": "tracy",
-      "features": [ "cli-tools" ]
-    },
+    "tracy",
     "vulkan",
     "vulkan-memory-allocator"
   ]

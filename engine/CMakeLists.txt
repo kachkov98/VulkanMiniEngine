@@ -31,10 +31,10 @@ target_link_libraries(engine
     cxxopts::cxxopts
     EnTT::EnTT
     glfw
-    gli
     glm::glm
     imgui::imgui
     imguizmo::imguizmo
+    KTX::ktx
     nlohmann_json::nlohmann_json
     spdlog::spdlog
     Taskflow::Taskflow

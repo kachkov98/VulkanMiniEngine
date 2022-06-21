@@ -14,7 +14,7 @@ public:
     if (copy.old_layout != vk::ImageLayout::eTransferDstOptimal) {
       vk::ImageMemoryBarrier2 barrier{vk::PipelineStageFlagBits2::eTopOfPipe,
                                       vk::AccessFlagBits2::eNone,
-                                      vk::PipelineStageFlagBits2::eTransfer,
+                                      vk::PipelineStageFlagBits2::eCopy,
                                       vk::AccessFlagBits2::eTransferWrite,
                                       copy.old_layout,
                                       vk::ImageLayout::eTransferDstOptimal,
@@ -29,7 +29,7 @@ public:
         staging_buf_, copy.image, vk::ImageLayout::eTransferDstOptimal, copy.regions});
 
     if (copy.new_layout != vk::ImageLayout::eTransferDstOptimal) {
-      vk::ImageMemoryBarrier2 barrier{vk::PipelineStageFlagBits2::eTransfer,
+      vk::ImageMemoryBarrier2 barrier{vk::PipelineStageFlagBits2::eCopy,
                                       vk::AccessFlagBits2::eTransferWrite,
                                       vk::PipelineStageFlagBits2::eBottomOfPipe,
                                       vk::AccessFlagBits2::eNone,
@@ -51,7 +51,7 @@ private:
 StagingBuffer::StagingBuffer(vk::Device device, vk::Queue queue, uint32_t queue_family_index,
                              vma::Allocator allocator)
     : device_(device), queue_(queue) {
-  upload_fence_ = device_.createFenceUnique({vk::FenceCreateFlagBits::eSignaled});
+  upload_fence_ = device_.createFenceUnique({});
   command_pool_ = device_.createCommandPoolUnique(
       {vk::CommandPoolCreateFlagBits::eResetCommandBuffer, queue_family_index});
   command_buffer_ = std::move(

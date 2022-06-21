@@ -65,6 +65,7 @@ private:
             .dynamicState(vk::DynamicState::eScissor)
             .colorAttachment(format, blend_state)
             .build();
+    context.getStagingBuffer().flush();
   }
 
   void onTerminate() override {
@@ -76,12 +77,21 @@ private:
   void onUpdate(double delta) override {}
 
   void onRender(double alpha) override {
+    static bool prev_state = false;
+    bool cur_state = vme::Engine::get<wsi::Input>().isKeyPressed(GLFW_KEY_F11);
+    if (!prev_state && cur_state) {
+      auto &window = vme::Engine::get<wsi::Window>();
+      window.setFullscreen(!window.isFullscreen());
+    }
+    prev_state = cur_state;
+
 #if 0
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
     ImGui::ShowDemoWindow();
     ImGui::Render();
 #endif
+
     auto &context = vme::Engine::get<gfx::Context>();
     auto &frame = context.getCurrentFrame();
     auto cmd_buf = frame.getCommandBuffer();
