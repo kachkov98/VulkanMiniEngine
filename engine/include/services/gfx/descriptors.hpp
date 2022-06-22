@@ -32,9 +32,20 @@ public:
 
   DescriptorSetLayoutBuilder &binding(uint32_t binding, vk::DescriptorType type, uint32_t count,
                                       vk::ShaderStageFlags stages = vk::ShaderStageFlagBits::eAll) {
-    bindings_.emplace_back(binding, type, count, stages, nullptr);
+    bindings_.emplace_back(binding, type, count, stages);
     return *this;
   }
+
+  DescriptorSetLayoutBuilder &
+  binding(uint32_t binding, vk::DescriptorType type,
+          const vk::ArrayProxyNoTemporaries<const vk::Sampler> &immutable_samplers,
+          vk::ShaderStageFlags stages = vk::ShaderStageFlagBits::eAll) {
+    assert(type == vk::DescriptorType::eSampler ||
+           type == vk::DescriptorType::eCombinedImageSampler);
+    bindings_.emplace_back(binding, type, stages, immutable_samplers);
+    return *this;
+  }
+
   vk::DescriptorSetLayout build() {
     std::sort(bindings_.begin(), bindings_.end());
     return *descriptor_set_layout_cache_->get({{}, bindings_});
@@ -90,19 +101,23 @@ public:
       : DescriptorSetLayoutBuilder(descriptor_layout_cache),
         descriptor_allocator_(&descriptor_allocator){};
 
-  DescriptorSetBuilder &bind(uint32_t binding, vk::DescriptorType type,
-                             vk::ArrayProxyNoTemporaries<vk::DescriptorBufferInfo> buffer_info,
-                             vk::ShaderStageFlags stage_flags = vk::ShaderStageFlagBits::eAll) {
+  DescriptorSetBuilder &
+  bind(uint32_t binding, vk::DescriptorType type,
+       const vk::ArrayProxyNoTemporaries<const vk::DescriptorBufferInfo> &buffer_info,
+       vk::ShaderStageFlags stage_flags = vk::ShaderStageFlagBits::eAll) {
     {
       DescriptorSetLayoutBuilder::binding(binding, type, buffer_info.size(), stage_flags);
       writes_.emplace_back(nullptr, binding, 0, type, nullptr, buffer_info);
       return *this;
     }
   }
-  DescriptorSetBuilder &bind(uint32_t binding, vk::DescriptorType type,
-                             vk::ArrayProxyNoTemporaries<vk::DescriptorImageInfo> image_info,
-                             vk::ShaderStageFlags stage_flags = vk::ShaderStageFlagBits::eAll) {
-    DescriptorSetLayoutBuilder::binding(binding, type, image_info.size(), stage_flags);
+  DescriptorSetBuilder &
+  bind(uint32_t binding, vk::DescriptorType type,
+       const vk::ArrayProxyNoTemporaries<const vk::DescriptorImageInfo> &image_info,
+       const vk::ArrayProxyNoTemporaries<const vk::Sampler> &immutable_samplers = {},
+       vk::ShaderStageFlags stage_flags = vk::ShaderStageFlagBits::eAll) {
+    assert(immutable_samplers.empty() || image_info.size() == immutable_samplers.size());
+    DescriptorSetLayoutBuilder::binding(binding, type, immutable_samplers, stage_flags);
     writes_.emplace_back(nullptr, binding, 0, type, image_info, nullptr);
     return *this;
   }

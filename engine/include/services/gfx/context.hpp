@@ -113,10 +113,11 @@ public:
   void acquireNextImage(vk::Semaphore image_available);
   void presentImage(vk::Semaphore render_finished);
 
-  ShaderModuleCache &getShaderModuleCache() noexcept { return shader_module_cache_; }
   DescriptorSetLayoutCache &getDescriptorSetLayoutCache() noexcept {
     return descriptor_set_layout_cache_;
   }
+  DescriptorSetAllocator &getDescriptorSetAllocator() noexcept { return descriptor_set_allocator_; }
+  ShaderModuleCache &getShaderModuleCache() noexcept { return shader_module_cache_; }
   PipelineLayoutCache &getPipelineLayoutCache() noexcept { return pipeline_layout_cache_; }
   PipelineCache &getPipelineCache() noexcept { return pipeline_cache_; }
 
@@ -150,6 +151,7 @@ private:
   std::vector<vk::UniqueImageView> swapchain_image_views_{};
 
   DescriptorSetLayoutCache descriptor_set_layout_cache_;
+  DescriptorSetAllocator descriptor_set_allocator_;
   ShaderModuleCache shader_module_cache_;
   PipelineLayoutCache pipeline_layout_cache_;
   PipelineCache pipeline_cache_;

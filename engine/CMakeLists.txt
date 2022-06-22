@@ -11,7 +11,9 @@ target_sources(engine
     "src/services/gfx/pipelines.cpp"
     "src/services/gfx/shaders.cpp"
     "src/services/gfx/staging_buffer.cpp"
-    "src/renderer/render_graph.cpp")
+    "src/renderer/render_graph.cpp"
+    "src/renderer/imgui_pass.cpp"
+    "src/renderer/present_pass.cpp")
 
 target_include_directories(engine
   PUBLIC

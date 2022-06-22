@@ -16,6 +16,7 @@ class Frame;
 namespace rg {
 class Node {
 public:
+  Node(const std::string &name) : name_(name) {}
   Node(const Node &) = delete;
   Node(Node &&) = default;
   Node &operator=(const Node &) = delete;
@@ -29,25 +30,36 @@ protected:
   unsigned id_, ref_count_{0};
 };
 
-class ResourceNode;
+class Resource;
+class PassBuilder;
 
-class PassNode : public Node {
+class Pass : public Node {
 public:
-  vk::PipelineStageFlagBits2 getStage() const noexcept { return stage_; }
+  Pass(const std::string &name, vk::PipelineStageFlags2 stage, bool has_side_effects = false)
+      : Node(name), stage_(stage), has_side_effects_(has_side_effects) {}
+  virtual ~Pass() = default;
+
+  vk::PipelineStageFlags2 getStage() const noexcept { return stage_; }
   bool hasSideEffects() const noexcept { return has_side_effects_; }
 
-protected:
-  virtual void setup() = 0;
-  virtual void execute() = 0;
+  void doSetup(PassBuilder &builder);
+  void doExecute(gfx::Frame &frame);
+  void dump(std::ostream &os) const;
 
-  vk::PipelineStageFlagBits2 stage_;
+protected:
+  virtual void setup(PassBuilder &builder) = 0;
+  virtual void execute(gfx::Frame &frame) = 0;
+
+  vk::PipelineStageFlags2 stage_;
   bool has_side_effects_{false};
-  std::vector<const ResourceNode *> creates_;
-  std::vector<const ResourceNode *> reads_;
-  std::vector<const ResourceNode *> writes_;
+  std::vector<std::pair<const Resource *, vk::AccessFlags2>> creates_;
+  std::vector<std::pair<const Resource *, vk::AccessFlags2>> reads_;
+  std::vector<std::pair<const Resource *, vk::AccessFlags2>> writes_;
 };
 
-class ResourceNode : public Node {
+std::ostream &operator<<(std::ostream &os, const Pass &pass);
+
+class Resource : public Node {
 public:
   unsigned getVersion() const noexcept { return version_; }
   bool isTransient() const noexcept { return creator_ != nullptr; }
@@ -56,16 +68,17 @@ public:
 protected:
   virtual void create() = 0;
   virtual void destroy() = 0;
+  virtual vk::MemoryRequirements getMemoryRequirements() = 0;
 
   unsigned version_{0};
-  const PassNode *creator_{nullptr};
-  std::vector<const PassNode *> readers_;
-  std::vector<const PassNode *> writers_;
+  const Pass *creator_{nullptr};
+  std::vector<const Pass *> readers_;
+  std::vector<const Pass *> writers_;
 };
 
-template <typename Data> class Pass final : public PassNode {};
+class Buffer : public Resource {};
 
-template <typename Descriptor> class Resource final : public ResourceNode {};
+class Image : public Resource {};
 
 class PassBuilder;
 
@@ -92,20 +105,20 @@ public:
   }
 
 private:
-  std::vector<std::unique_ptr<PassNode>> passes_;
-  std::vector<std::unique_ptr<ResourceNode>> resources_;
+  std::vector<std::unique_ptr<Pass>> passes_;
+  std::vector<std::unique_ptr<Resource>> resources_;
 };
 
 std::ostream &operator<<(std::ostream &os, const RenderGraph &RG);
 
 class PassBuilder final {
 public:
-  PassBuilder(RenderGraph &render_graph, PassNode &pass_node)
-      : render_graph_(&render_graph), pass_node_(&pass_node) {}
+  PassBuilder(RenderGraph &render_graph, Pass &pass)
+      : render_graph_(&render_graph), pass_(&pass) {}
 
 private:
   RenderGraph *render_graph_;
-  PassNode *pass_node_;
+  Pass *pass_;
 };
 
 } // namespace rg

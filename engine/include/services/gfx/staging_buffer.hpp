@@ -24,7 +24,7 @@ public:
 
   template <typename T>
   void uploadBuffer(vk::Buffer buffer, const Data<T> &data,
-                    const vk::ArrayProxy<vk::BufferCopy2> &regions) {
+                    const vk::ArrayProxy<const vk::BufferCopy2> &regions) {
     auto offset = copyData(reinterpret_cast<const void *>(data.data()), data.size() * sizeof(T));
     std::vector<vk::BufferCopy2> copies(regions.begin(), regions.end());
     for (auto &copy : copies)
@@ -35,7 +35,7 @@ public:
   template <typename T>
   void uploadImage(vk::Image image, vk::ImageLayout old_layout, vk::ImageLayout new_layout,
                    vk::ImageSubresourceRange subresource, const Data<T> &data,
-                   const vk::ArrayProxy<vk::BufferImageCopy2> &regions) {
+                   const vk::ArrayProxy<const vk::BufferImageCopy2> &regions) {
     auto offset = copyData(reinterpret_cast<const void *>(data.data()), data.size() * sizeof(T));
     std::vector<vk::BufferImageCopy2> copies(regions.begin(), regions.end());
     for (auto &copy : copies)

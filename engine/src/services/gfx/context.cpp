@@ -180,6 +180,7 @@ Context::Context(const wsi::Window &window) {
   recreateSwapchain(window.getFramebufferSize());
   // Create resource caches
   descriptor_set_layout_cache_ = DescriptorSetLayoutCache(*device_);
+  descriptor_set_allocator_ = DescriptorSetAllocator(*device_);
   shader_module_cache_ = ShaderModuleCache(*device_);
   pipeline_layout_cache_ = PipelineLayoutCache(*device_);
   pipeline_cache_ = PipelineCache(*device_);

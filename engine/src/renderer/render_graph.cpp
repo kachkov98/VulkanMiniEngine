@@ -6,6 +6,14 @@
 
 namespace rg {
 
+void Pass::doSetup(PassBuilder &builder) { setup(builder); }
+
+void Pass::doExecute(gfx::Frame &frame) {
+  TracyVkZoneTransient(frame.getTracyVkCtx(), __tracy_gpu_zone, frame.getCommandBuffer(),
+                       getName().c_str(), true);
+  execute(frame);
+}
+
 void RenderGraph::compile() {}
 
 void RenderGraph::execute(gfx::Frame &frame) {
