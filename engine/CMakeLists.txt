@@ -26,7 +26,8 @@ target_compile_definitions(engine
   PUBLIC
     VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
     VMA_STATIC_VULKAN_FUNCTIONS=0
-    VMA_DYNAMIC_VULKAN_FUNCTIONS=1)
+    VMA_DYNAMIC_VULKAN_FUNCTIONS=1
+    IMGUI_USER_CONFIG="imgui_config.h")
 
 target_link_libraries(engine
   PUBLIC

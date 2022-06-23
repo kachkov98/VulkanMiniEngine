@@ -233,6 +233,7 @@ public:
 
   VmaAllocatorInfo getInfo() const noexcept;
   void setCurrentFrameIndex(uint32_t index) noexcept;
+  uint32_t findMemoryTypeIndex(uint32_t memory_type_bits, const AllocationCreateInfo &alloc_info);
 
   Allocation createAllocation(const vk::MemoryRequirements &memory_requirements,
                               const AllocationCreateInfo &alloc_info);

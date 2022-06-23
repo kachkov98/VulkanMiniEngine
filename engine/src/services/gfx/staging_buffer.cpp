@@ -48,9 +48,9 @@ private:
   vk::Buffer staging_buf_;
 };
 
-StagingBuffer::StagingBuffer(vk::Device device, vk::Queue queue, uint32_t queue_family_index,
+StagingBuffer::StagingBuffer(vk::Device device, uint32_t queue_family_index, uint32_t queue_index,
                              vma::Allocator allocator)
-    : device_(device), queue_(queue) {
+    : device_(device), queue_(device.getQueue(queue_family_index, queue_index)) {
   upload_fence_ = device_.createFenceUnique({});
   command_pool_ = device_.createCommandPoolUnique(
       {vk::CommandPoolCreateFlagBits::eResetCommandBuffer, queue_family_index});

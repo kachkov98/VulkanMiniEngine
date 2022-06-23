@@ -66,11 +66,11 @@ private:
 class Frame final {
 public:
   Frame() = default;
-  Frame(vk::PhysicalDevice physical_device, vk::Device device, vk::Queue queue,
-        uint32_t queue_family_index);
+  Frame(vk::PhysicalDevice physical_device, vk::Device device, uint32_t queue_family_index,
+        uint32_t queue_index, vma::Allocator allocator);
 
   void submit() const;
-  void reset() const;
+  void reset();
 
   vk::Semaphore getImageAvailableSemaphore() const noexcept { return *image_available_; }
   vk::Semaphore getRenderFinishedSemaphore() const noexcept { return *render_finished_; }
@@ -78,14 +78,26 @@ public:
   vk::CommandBuffer getCommandBuffer() const noexcept { return *command_buffer_; }
   TracyVkCtx getTracyVkCtx() const noexcept { return *tracy_vk_ctx_; }
 
+  template <typename T>
+  std::pair<vk::Buffer, T *> createTransientBuffer(vk::BufferUsageFlags usage, size_t size) {
+    auto [buffer, mapped_data] = createTransientBuffer(usage, size * sizeof(T));
+    return {buffer, reinterpret_cast<T *>(mapped_data)};
+  }
+
 private:
   vk::Device device_ = {};
   vk::Queue queue_ = {};
+  vma::Allocator allocator_ = {};
   vk::UniqueSemaphore image_available_ = {}, render_finished_ = {};
   vk::UniqueFence render_fence_ = {};
   vk::UniqueCommandPool command_pool_ = {};
   vk::UniqueCommandBuffer command_buffer_ = {};
   UniqueTracyVkCtx tracy_vk_ctx_ = {};
+
+  vma::UniquePool transient_pool_;
+  std::vector<vma::UniqueBuffer> transient_buffers_;
+
+  std::pair<vk::Buffer, void *> createTransientBuffer(vk::BufferUsageFlags usage, size_t size);
 };
 
 class Context final {
@@ -101,8 +113,6 @@ public:
   vk::SurfaceFormatKHR getSurfaceFormat() const noexcept { return surface_format_; }
 
   vk::Device getDevice() const noexcept { return *device_; }
-  vk::Queue getMainQueue() const noexcept { return device_->getQueue(main_queue_family_index_, 0); }
-  uint32_t getMainQueueFamilyIndex() const noexcept { return main_queue_family_index_; }
 
   void recreateSwapchain(glm::uvec2 new_extent);
   vk::Image getCurrentImage() const noexcept { return swapchain_images_[current_swapchain_image_]; }
@@ -142,7 +152,7 @@ private:
   vk::SurfaceFormatKHR surface_format_ = {};
 
   vk::UniqueDevice device_ = {};
-  uint32_t main_queue_family_index_ = -1u;
+  uint32_t queue_family_index_ = -1u;
 
   uint32_t current_swapchain_image_{0}, num_swapchain_images_{3};
   vk::Extent2D swapchain_extent_ = {};

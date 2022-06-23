@@ -3,13 +3,12 @@
 #include "engine.hpp"
 #include "services/gfx/context.hpp"
 
+#include <glm/common.hpp>
 #include <imgui.h>
 
 namespace rg {
 ImGuiPass::ImGuiPass() : Pass("ImGui", vk::PipelineStageFlagBits2::eAllGraphics) {
   auto &context = vme::Engine::get<gfx::Context>();
-  extent_ = context.getSwapchainExtent();
-  format_ = context.getSurfaceFormat().format;
   // Create pipeline
   {
     auto &shader_module_cache = context.getShaderModuleCache();
@@ -39,15 +38,17 @@ ImGuiPass::ImGuiPass() : Pass("ImGui", vk::PipelineStageFlagBits2::eAllGraphics)
                                      context.getDescriptorSetLayoutCache())
             .shaderStage(shader_module_cache.get("imgui.vert.spv"))
             .shaderStage(shader_module_cache.get("imgui.frag.spv"))
+            .vertexBinding({0, sizeof(ImDrawVert), vk::VertexInputRate::eVertex})
+            .vertexAttribute({0, 0, vk::Format::eR32G32Sfloat, IM_OFFSETOF(ImDrawVert, pos)})
+            .vertexAttribute({1, 0, vk::Format::eR32G32Sfloat, IM_OFFSETOF(ImDrawVert, uv)})
+            .vertexAttribute({2, 0, vk::Format::eR8G8B8A8Unorm, IM_OFFSETOF(ImDrawVert, col)})
             .inputAssembly({{}, vk::PrimitiveTopology::eTriangleList})
             .rasterization(raster_state)
             .dynamicState(vk::DynamicState::eViewport)
             .dynamicState(vk::DynamicState::eScissor)
-            .colorAttachment(format_, blend_state)
+            .colorAttachment(context.getSurfaceFormat().format, blend_state)
             .build();
   }
-  // Create buffers
-
   // Create font texture
   {
     unsigned char *pixels;
@@ -101,30 +102,65 @@ ImGuiPass::ImGuiPass() : Pass("ImGui", vk::PipelineStageFlagBits2::eAllGraphics)
 void ImGuiPass::setup(PassBuilder &builder){};
 
 void ImGuiPass::execute(gfx::Frame &frame) {
+  auto &context = vme::Engine::get<gfx::Context>();
   ImDrawData *draw_data = ImGui::GetDrawData();
-  glm::vec2 scale = 2.f / glm::vec2{draw_data->DisplaySize.x, draw_data->DisplaySize.y};
-  glm::vec2 translate = 1.f - glm::vec2{draw_data->DisplayPos.x, draw_data->DisplayPos.y} * scale;
+  glm::vec2 display_pos = draw_data->DisplayPos, display_size = draw_data->DisplaySize,
+            framebuffer_scale = draw_data->FramebufferScale;
+  glm::vec2 scale = 2.f / display_size;
+  glm::vec2 translate = -1.f - display_pos * scale;
+  glm::vec2 framebuffer_size = display_size * framebuffer_scale;
+  // Allocate vertex and index buffers
+  if (!draw_data->TotalVtxCount)
+    return;
+  auto [vertex_buffer, vertex_data] = frame.createTransientBuffer<ImDrawVert>(
+      vk::BufferUsageFlagBits::eVertexBuffer, draw_data->TotalVtxCount);
+  auto [index_buffer, index_data] = frame.createTransientBuffer<ImDrawIdx>(
+      vk::BufferUsageFlagBits::eIndexBuffer, draw_data->TotalIdxCount);
 
   auto cmd_buf = frame.getCommandBuffer();
-  cmd_buf.beginRendering({});
+  vk::RenderingAttachmentInfo color_attachment{
+      context.getCurrentImageView(),
+      vk::ImageLayout::eColorAttachmentOptimal,
+      vk::ResolveModeFlagBits::eNone,
+      {},
+      vk::ImageLayout::eUndefined,
+      vk::AttachmentLoadOp::eClear,
+      vk::AttachmentStoreOp::eStore,
+      vk::ClearValue(vk::ClearColorValue(std::array{0.f, 0.25f, 1.f, 0.f}))};
+  cmd_buf.beginRendering({vk::RenderingFlags{},
+                          vk::Rect2D{{},
+                                     {static_cast<uint32_t>(framebuffer_size.x),
+                                      static_cast<uint32_t>(framebuffer_size.y)}},
+                          1, 0, color_attachment});
   pipeline_.bind(cmd_buf);
   pipeline_.bindDesriptorSet(cmd_buf, 0, descriptor_set_.get());
   pipeline_.setPushConstant<PushConstant>(cmd_buf, vk::ShaderStageFlagBits::eVertex, 0,
                                           PushConstant{scale, translate});
 
-  cmd_buf.bindVertexBuffers(0, vertex_buffer_->getBuffer(), vk::DeviceSize{0});
-  cmd_buf.bindIndexBuffer(index_buffer_->getBuffer(), vk::DeviceSize{0},
+  cmd_buf.bindVertexBuffers(0, vertex_buffer, vk::DeviceSize{0});
+  cmd_buf.bindIndexBuffer(index_buffer, vk::DeviceSize{0},
                           sizeof(ImDrawIdx) == 2 ? vk::IndexType::eUint16 : vk::IndexType::eUint32);
-  cmd_buf.setViewport(0, vk::Viewport{0.f, 0.f, static_cast<float>(extent_.width),
-                                      static_cast<float>(extent_.height), 0.f, 1.f});
+  cmd_buf.setViewport(0, vk::Viewport{0.f, 0.f, framebuffer_size.x, framebuffer_size.y, 0.f, 1.f});
   size_t vertex_offset = 0, index_offset = 0;
   for (int n = 0; n < draw_data->CmdListsCount; ++n) {
     const ImDrawList *cmd_list = draw_data->CmdLists[n];
+    std::copy(cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Data + cmd_list->VtxBuffer.Size,
+              vertex_data + vertex_offset);
+    std::copy(cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Data + cmd_list->IdxBuffer.Size,
+              index_data + index_offset);
     for (int i = 0; i < cmd_list->CmdBuffer.Size; ++i) {
       const auto &cmd = cmd_list->CmdBuffer[i];
       // User callbacks not supported yet
       assert(cmd.UserCallback == nullptr);
-      cmd_buf.setScissor(0, vk::Rect2D{vk::Offset2D{}, vk::Extent2D{}});
+      glm::vec2 clip_min =
+          glm::clamp((glm::vec2(cmd.ClipRect.x, cmd.ClipRect.y) - display_pos) * framebuffer_scale,
+                     glm::vec2(), framebuffer_size);
+      glm::vec2 clip_max =
+          glm::clamp((glm::vec2(cmd.ClipRect.z, cmd.ClipRect.w) - display_pos) * framebuffer_scale,
+                     glm::vec2(), framebuffer_size);
+      glm::ivec2 offset = clip_min;
+      glm::uvec2 extent = clip_max - clip_min;
+      cmd_buf.setScissor(0, vk::Rect2D{{offset.x, offset.y}, {extent.x, extent.y}});
       cmd_buf.drawIndexed(cmd.ElemCount, 1, index_offset + cmd.IdxOffset,
                           vertex_offset + cmd.VtxOffset, 0);
     }

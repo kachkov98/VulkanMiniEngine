@@ -15,7 +15,7 @@ public:
   template <typename T> using Data = vk::ArrayProxy<T>;
 
   StagingBuffer() = default;
-  StagingBuffer(vk::Device device, vk::Queue queue, uint32_t queue_family_index,
+  StagingBuffer(vk::Device device, uint32_t queue_family_index, uint32_t queue_index,
                 vma::Allocator allocator);
   StagingBuffer(const StagingBuffer &) = delete;
   StagingBuffer(StagingBuffer &&) = delete;

@@ -1,4 +1,5 @@
 #include "engine.hpp"
+#include "renderer/imgui_pass.hpp"
 #include "services/gfx/context.hpp"
 #include "services/wsi/input.hpp"
 #include "services/wsi/window.hpp"
@@ -22,61 +23,19 @@ private:
 
   void onInit() override {
     ImGui_ImplGlfw_InitForVulkan(vme::Engine::get<wsi::Window>().getHandle(), true);
-    // Create pipeline
-    auto &context = vme::Engine::get<gfx::Context>();
-    auto &shader_module_cache = context.getShaderModuleCache();
-    auto format = context.getSurfaceFormat().format;
-    vk::PipelineRasterizationStateCreateInfo raster_state{{},
-                                                          false,
-                                                          false,
-                                                          vk::PolygonMode::eFill,
-                                                          vk::CullModeFlagBits::eNone,
-                                                          vk::FrontFace::eClockwise,
-                                                          false,
-                                                          0.f,
-                                                          0.f,
-                                                          0.f,
-                                                          1.f};
-    vk::PipelineColorBlendAttachmentState blend_state(
-        true, vk::BlendFactor::eSrcAlpha, vk::BlendFactor::eOneMinusSrcAlpha, vk::BlendOp::eAdd,
-        vk::BlendFactor::eOne, vk::BlendFactor::eOneMinusSrcAlpha, vk::BlendOp::eAdd,
-        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eB |
-            vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eA);
-    pipeline_ =
-        gfx::GraphicsPipelineBuilder(context.getPipelineCache(), context.getPipelineLayoutCache(),
-                                     context.getDescriptorSetLayoutCache())
-            .shaderStage(shader_module_cache.get("shader.vert.spv"))
-            .shaderStage(shader_module_cache.get("shader.frag.spv"))
-            .inputAssembly({{}, vk::PrimitiveTopology::eTriangleList})
-            .rasterization(raster_state)
-            .dynamicState(vk::DynamicState::eViewport)
-            .dynamicState(vk::DynamicState::eScissor)
-            .colorAttachment(format, blend_state)
-            .build();
-
-    imgui_pipeline_ =
-        gfx::GraphicsPipelineBuilder(context.getPipelineCache(), context.getPipelineLayoutCache(),
-                                     context.getDescriptorSetLayoutCache())
-            .shaderStage(shader_module_cache.get("imgui.vert.spv"))
-            .shaderStage(shader_module_cache.get("imgui.frag.spv"))
-            .inputAssembly({{}, vk::PrimitiveTopology::eTriangleList})
-            .rasterization(raster_state)
-            .dynamicState(vk::DynamicState::eViewport)
-            .dynamicState(vk::DynamicState::eScissor)
-            .colorAttachment(format, blend_state)
-            .build();
-    context.getStagingBuffer().flush();
+    pass_ = std::make_unique<rg::ImGuiPass>();
+    vme::Engine::get<gfx::Context>().getStagingBuffer().flush();
   }
 
   void onTerminate() override {
-    imgui_pipeline_.reset();
-    pipeline_.reset();
+    pass_.reset();
     ImGui_ImplGlfw_Shutdown();
   }
 
   void onUpdate(double delta) override {}
 
   void onRender(double alpha) override {
+    // Toogle fullscreen
     static bool prev_state = false;
     bool cur_state = vme::Engine::get<wsi::Input>().isKeyPressed(GLFW_KEY_F11);
     if (!prev_state && cur_state) {
@@ -84,14 +43,12 @@ private:
       window.setFullscreen(!window.isFullscreen());
     }
     prev_state = cur_state;
-
-#if 0
+    // Collect ImGui data
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
     ImGui::ShowDemoWindow();
     ImGui::Render();
-#endif
-
+    // Render
     auto &context = vme::Engine::get<gfx::Context>();
     auto &frame = context.getCurrentFrame();
     auto cmd_buf = frame.getCommandBuffer();
@@ -131,20 +88,9 @@ private:
           context.getCurrentImage(),
           vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
       cmd_buf.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-      {
-        TracyVkZone(frame.getTracyVkCtx(), cmd_buf, "Render pass");
-        cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier1});
-        cmd_buf.beginRendering(
-            {vk::RenderingFlags{}, vk::Rect2D{vk::Offset2D{0, 0}, extent}, 1, 0, color_attachment});
-        pipeline_.bind(cmd_buf);
-        cmd_buf.setViewport(
-            0, vk::Viewport(0.0f, 0.0f, (float)extent.width, (float)extent.height, 0.0f, 1.0f));
-        cmd_buf.setScissor(0, vk::Rect2D(vk::Offset2D(), extent));
-        cmd_buf.draw(3, 1, 0, 0);
-
-        cmd_buf.endRendering();
-        cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier2});
-      }
+      cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier1});
+      pass_->doExecute(frame);
+      cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier2});
       TracyVkCollect(frame.getTracyVkCtx(), cmd_buf);
       cmd_buf.end();
       frame.submit();
@@ -158,8 +104,7 @@ private:
   }
 
 private:
-  gfx::Pipeline pipeline_;
-  gfx::Pipeline imgui_pipeline_;
+  std::unique_ptr<rg::Pass> pass_;
 };
 
 int main(int argc, char *argv[]) {

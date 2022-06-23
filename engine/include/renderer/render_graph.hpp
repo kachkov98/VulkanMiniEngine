@@ -14,6 +14,10 @@ class Frame;
 }
 
 namespace rg {
+
+using PassId = size_t;
+using ResourceId = size_t;
+
 class Node {
 public:
   Node(const std::string &name) : name_(name) {}
@@ -90,9 +94,14 @@ public:
   RenderGraph &operator=(const RenderGraph &) = delete;
   RenderGraph &operator=(RenderGraph &&) noexcept = default;
 
-  template <typename Data> void addPass(const std::string &name, vk::PipelineStageFlags);
+  template <typename T, typename... Args> PassId addPass(Args &&...args) {
+    static_assert(std::is_base_of_v<Pass, T>, "T is not derived from Pass");
+    PassId id = passes_.size();
+    passes_.push_back(std::make_unique<T>(std::forward<Args>(args)...));
+    return id;
+  }
 
-  template <typename Descriptor> void addResource(const std::string &name);
+  template <typename Descriptor> ResourceId addResource(const std::string &name);
 
   void compile();
   void execute(gfx::Frame &frame);
@@ -115,6 +124,10 @@ class PassBuilder final {
 public:
   PassBuilder(RenderGraph &render_graph, Pass &pass)
       : render_graph_(&render_graph), pass_(&pass) {}
+
+  void create(vk::AccessFlags2 access);
+  void read(vk::AccessFlags2 access);
+  void write(vk::AccessFlags2 access);
 
 private:
   RenderGraph *render_graph_;

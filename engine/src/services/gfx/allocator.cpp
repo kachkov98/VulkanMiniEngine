@@ -31,6 +31,13 @@ void Allocator::setCurrentFrameIndex(uint32_t index) noexcept {
   vmaSetCurrentFrameIndex(*this, index);
 }
 
+uint32_t Allocator::findMemoryTypeIndex(uint32_t memory_type_bits,
+                                        const AllocationCreateInfo &alloc_info) {
+  uint32_t memory_type_index;
+  VMA_CHECK(vmaFindMemoryTypeIndex, *this, memory_type_bits, &alloc_info, &memory_type_index);
+  return memory_type_index;
+}
+
 Allocation Allocator::createAllocation(const vk::MemoryRequirements &memory_requirements,
                                        const AllocationCreateInfo &alloc_info) {
   VmaAllocation allocation;
@@ -103,7 +110,8 @@ vk::UniqueBuffer Allocator::createAliasingBufferUnique(Allocation allocation,
       vk::ObjectDestroy<vk::Device, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE>(getInfo().device));
 }
 
-Image Allocator::createImage(const vk::ImageCreateInfo &image_info, const AllocationCreateInfo &alloc_info) {
+Image Allocator::createImage(const vk::ImageCreateInfo &image_info,
+                             const AllocationCreateInfo &alloc_info) {
   VkImage image;
   VmaAllocation allocation;
   VMA_CHECK(vmaCreateImage, *this, reinterpret_cast<const VkImageCreateInfo *>(&image_info),
@@ -120,7 +128,8 @@ void Allocator::destroy(Image image) noexcept {
   vmaDestroyImage(*this, image.getImage(), image.getAllocation());
 }
 
-vk::Image Allocator::createAliasingImage(Allocation allocation, const vk::ImageCreateInfo &image_info) {
+vk::Image Allocator::createAliasingImage(Allocation allocation,
+                                         const vk::ImageCreateInfo &image_info) {
   VkImage image;
   VMA_CHECK(vmaCreateAliasingImage, *this, allocation,
             reinterpret_cast<const VkImageCreateInfo *>(&image_info), &image);

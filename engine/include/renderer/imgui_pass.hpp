@@ -18,15 +18,11 @@ protected:
   void execute(gfx::Frame &frame) override;
 
 private:
-  vk::Extent2D extent_;
-  vk::Format format_;
-
   struct PushConstant {
     glm::vec2 scale, translate;
   };
 
   gfx::Pipeline pipeline_;
-  vma::UniqueBuffer vertex_buffer_, index_buffer_;
   vma::UniqueImage font_texture_;
   vk::UniqueImageView font_texture_view_;
   vk::UniqueSampler font_sampler_;
