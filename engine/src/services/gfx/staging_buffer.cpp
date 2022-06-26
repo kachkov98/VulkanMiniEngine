@@ -52,8 +52,7 @@ StagingBuffer::StagingBuffer(vk::Device device, uint32_t queue_family_index, uin
                              vma::Allocator allocator)
     : device_(device), queue_(device.getQueue(queue_family_index, queue_index)) {
   upload_fence_ = device_.createFenceUnique({});
-  command_pool_ = device_.createCommandPoolUnique(
-      {vk::CommandPoolCreateFlagBits::eResetCommandBuffer, queue_family_index});
+  command_pool_ = device_.createCommandPoolUnique({{}, queue_family_index});
   command_buffer_ = std::move(
       device_.allocateCommandBuffersUnique({*command_pool_, vk::CommandBufferLevel::ePrimary, 1})
           .front());
@@ -73,7 +72,7 @@ void StagingBuffer::flush() {
   if (device_.waitForFences(*upload_fence_, VK_TRUE, UINT64_MAX) == vk::Result::eTimeout)
     throw std::runtime_error("Unexpected upload fence timeout");
   device_.resetFences(*upload_fence_);
-  command_buffer_->reset({});
+  device_.resetCommandPool(*command_pool_);
   offset_ = 0;
   copies_.clear();
 }

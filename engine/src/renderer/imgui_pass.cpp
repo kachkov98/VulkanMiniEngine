@@ -112,9 +112,9 @@ void ImGuiPass::execute(gfx::Frame &frame) {
   // Allocate vertex and index buffers
   if (!draw_data->TotalVtxCount)
     return;
-  auto [vertex_buffer, vertex_data] = frame.createTransientBuffer<ImDrawVert>(
+  auto [vertex_buffer, vertex_data] = frame.getAllocator().createBuffer<ImDrawVert>(
       vk::BufferUsageFlagBits::eVertexBuffer, draw_data->TotalVtxCount);
-  auto [index_buffer, index_data] = frame.createTransientBuffer<ImDrawIdx>(
+  auto [index_buffer, index_data] = frame.getAllocator().createBuffer<ImDrawIdx>(
       vk::BufferUsageFlagBits::eIndexBuffer, draw_data->TotalIdxCount);
 
   auto cmd_buf = frame.getCommandBuffer();
@@ -127,11 +127,8 @@ void ImGuiPass::execute(gfx::Frame &frame) {
       vk::AttachmentLoadOp::eClear,
       vk::AttachmentStoreOp::eStore,
       vk::ClearValue(vk::ClearColorValue(std::array{0.f, 0.25f, 1.f, 0.f}))};
-  cmd_buf.beginRendering({vk::RenderingFlags{},
-                          vk::Rect2D{{},
-                                     {static_cast<uint32_t>(framebuffer_size.x),
-                                      static_cast<uint32_t>(framebuffer_size.y)}},
-                          1, 0, color_attachment});
+  cmd_buf.beginRendering(
+      {vk::RenderingFlags{}, vk::Rect2D{{}, context.getSwapchainExtent()}, 1, 0, color_attachment});
   pipeline_.bind(cmd_buf);
   pipeline_.bindDesriptorSet(cmd_buf, 0, descriptor_set_.get());
   pipeline_.setPushConstant<PushConstant>(cmd_buf, vk::ShaderStageFlagBits::eVertex, 0,

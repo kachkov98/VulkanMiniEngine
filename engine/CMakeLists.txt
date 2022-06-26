@@ -6,6 +6,7 @@ target_sources(engine
     "src/services/wsi/window.cpp"
     "src/services/wsi/input.cpp"
     "src/services/gfx/context.cpp"
+    "src/services/gfx/frame.cpp"
     "src/services/gfx/allocator.cpp"
     "src/services/gfx/descriptors.cpp"
     "src/services/gfx/pipelines.cpp"

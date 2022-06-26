@@ -30,7 +30,8 @@ vk::DescriptorPool DescriptorSetAllocator::getPool(unsigned size) {
 }
 
 vk::UniqueDescriptorSet
-DescriptorSetAllocator::allocate(const vk::DescriptorSetLayout &descriptor_layout) {
+DescriptorSetAllocator::allocate(const vk::DescriptorSetLayout &descriptor_layout,
+                                 const vk::ArrayProxy<const vk::WriteDescriptorSet> &bindings) {
   vk::DescriptorSet descriptor_set;
   if (!current_pool_)
     current_pool_ = getPool();
@@ -41,6 +42,12 @@ DescriptorSetAllocator::allocate(const vk::DescriptorSetLayout &descriptor_layou
     result = device_.allocateDescriptorSets(&alloc_info, &descriptor_set);
   }
   auto deleter = vk::PoolFree(device_, current_pool_, VULKAN_HPP_DEFAULT_DISPATCHER);
+  std::vector<vk::WriteDescriptorSet> writes(bindings.begin(), bindings.end());
+  for (auto &write : writes) {
+    assert(!write.dstSet);
+    write.dstSet = descriptor_set;
+  }
+  device_.updateDescriptorSets(writes, {});
   return vk::UniqueDescriptorSet(descriptor_set, deleter);
 }
 
@@ -55,10 +62,6 @@ void DescriptorSetAllocator::reset() {
 
 DescriptorSet DescriptorSetBuilder::build() {
   auto layout = DescriptorSetLayoutBuilder::build();
-  auto descriptor_set = descriptor_allocator_->allocate(layout);
-  for (auto &write : writes_)
-    write.dstSet = *descriptor_set;
-  descriptor_allocator_->getDevice().updateDescriptorSets(writes_, {});
-  return DescriptorSet(std::move(descriptor_set), layout);
+  return DescriptorSet(descriptor_allocator_->allocate(layout, bindings_), layout);
 }
 } // namespace gfx

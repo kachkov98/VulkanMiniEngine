@@ -62,9 +62,8 @@ public:
   DescriptorSetAllocator() = default;
   DescriptorSetAllocator(vk::Device device) noexcept : device_(device) {}
 
-  vk::Device getDevice() const noexcept { return device_; }
-
-  vk::UniqueDescriptorSet allocate(const vk::DescriptorSetLayout &descriptor_layout);
+  vk::UniqueDescriptorSet allocate(const vk::DescriptorSetLayout &descriptor_layout,
+                                   const vk::ArrayProxy<const vk::WriteDescriptorSet> &bindings);
   void reset();
 
 private:
@@ -107,7 +106,7 @@ public:
        vk::ShaderStageFlags stage_flags = vk::ShaderStageFlagBits::eAll) {
     {
       DescriptorSetLayoutBuilder::binding(binding, type, buffer_info.size(), stage_flags);
-      writes_.emplace_back(nullptr, binding, 0, type, nullptr, buffer_info);
+      bindings_.emplace_back(nullptr, binding, 0, type, nullptr, buffer_info);
       return *this;
     }
   }
@@ -118,7 +117,7 @@ public:
        vk::ShaderStageFlags stage_flags = vk::ShaderStageFlagBits::eAll) {
     assert(immutable_samplers.empty() || image_info.size() == immutable_samplers.size());
     DescriptorSetLayoutBuilder::binding(binding, type, immutable_samplers, stage_flags);
-    writes_.emplace_back(nullptr, binding, 0, type, image_info, nullptr);
+    bindings_.emplace_back(nullptr, binding, 0, type, image_info, nullptr);
     return *this;
   }
 
@@ -127,7 +126,7 @@ public:
 private:
   DescriptorSetAllocator *descriptor_allocator_{nullptr};
 
-  std::vector<vk::WriteDescriptorSet> writes_;
+  std::vector<vk::WriteDescriptorSet> bindings_;
 };
 } // namespace gfx
 
