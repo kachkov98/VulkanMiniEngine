@@ -36,6 +36,8 @@ ImGuiPass::ImGuiPass() : Pass("ImGui", vk::PipelineStageFlagBits2::eAllGraphics)
     pipeline_ =
         gfx::GraphicsPipelineBuilder(context.getPipelineCache(), context.getPipelineLayoutCache(),
                                      context.getDescriptorSetLayoutCache())
+            .resourceDescriptorHeap(0, context.getTextureDescriptorHeap())
+            .resourceDescriptorHeap(1, context.getSamplerDescriptorHeap())
             .shaderStage(shader_module_cache.get("imgui.vert.spv"))
             .shaderStage(shader_module_cache.get("imgui.frag.spv"))
             .vertexBinding({0, sizeof(ImDrawVert), vk::VertexInputRate::eVertex})
@@ -87,16 +89,14 @@ ImGuiPass::ImGuiPass() : Pass("ImGui", vk::PipelineStageFlagBits2::eAllGraphics)
   // Create font sampler
   font_sampler_ = context.getDevice().createSamplerUnique(
       {{}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear});
-  // Create descriptor set
-  {
-    vk::DescriptorImageInfo image_info{*font_sampler_, *font_texture_view_,
-                                       vk::ImageLayout::eShaderReadOnlyOptimal};
-    descriptor_set_ = gfx::DescriptorSetBuilder(context.getDescriptorSetAllocator(),
-                                                context.getDescriptorSetLayoutCache())
-                          .bind(0, vk::DescriptorType::eCombinedImageSampler, image_info,
-                                *font_sampler_, vk::ShaderStageFlagBits::eFragment)
-                          .build();
-  }
+
+  uint32_t texture_index = context.getTextureDescriptorHeap().allocate(
+      *font_texture_view_, vk::ImageLayout::eShaderReadOnlyOptimal);
+  uint32_t sampler_index = context.getSamplerDescriptorHeap().allocate(*font_sampler_);
+  uint64_t packed_index = ((uint64_t)texture_index << 32) | sampler_index;
+  static_assert(sizeof(ImTextureID) == sizeof(uint64_t),
+                "Can not pack texture and sampler index into ImTextureID");
+  ImGui::GetIO().Fonts->SetTexID(reinterpret_cast<ImTextureID>(packed_index));
 }
 
 void ImGuiPass::setup(PassBuilder &builder){};
@@ -130,9 +130,9 @@ void ImGuiPass::execute(gfx::Frame &frame) {
   cmd_buf.beginRendering(
       {vk::RenderingFlags{}, vk::Rect2D{{}, context.getSwapchainExtent()}, 1, 0, color_attachment});
   pipeline_.bind(cmd_buf);
-  pipeline_.bindDesriptorSet(cmd_buf, 0, descriptor_set_.get());
-  pipeline_.setPushConstant<PushConstant>(cmd_buf, vk::ShaderStageFlagBits::eVertex, 0,
-                                          PushConstant{scale, translate});
+  pipeline_.setPushConstant<TransformData>(
+      cmd_buf, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0,
+      TransformData{scale, translate});
 
   cmd_buf.bindVertexBuffers(0, vertex_buffer, vk::DeviceSize{0});
   cmd_buf.bindIndexBuffer(index_buffer, vk::DeviceSize{0},
@@ -149,6 +149,12 @@ void ImGuiPass::execute(gfx::Frame &frame) {
       const auto &cmd = cmd_list->CmdBuffer[i];
       // User callbacks not supported yet
       assert(cmd.UserCallback == nullptr);
+      uint64_t packed_index = reinterpret_cast<uint64_t>(cmd.GetTexID());
+      uint32_t texture_index = packed_index >> 32;
+      uint32_t sampler_index = packed_index & UINT32_MAX;
+      pipeline_.setPushConstant<ResourceIndices>(
+          cmd_buf, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+          sizeof(TransformData), ResourceIndices{texture_index, sampler_index});
       glm::vec2 clip_min =
           glm::clamp((glm::vec2(cmd.ClipRect.x, cmd.ClipRect.y) - display_pos) * framebuffer_scale,
                      glm::vec2(), framebuffer_size);

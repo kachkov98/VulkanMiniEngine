@@ -7,6 +7,7 @@
 #include <vulkan/vulkan_hash.hpp>
 
 #include <algorithm>
+#include <variant>
 #include <vector>
 
 namespace gfx {
@@ -75,24 +76,6 @@ private:
   vk::DescriptorPool getPool(unsigned size = 1024);
 };
 
-class DescriptorSet final {
-public:
-  DescriptorSet() = default;
-  DescriptorSet(vk::UniqueDescriptorSet &&descriptor_set, vk::DescriptorSetLayout layout)
-      : descriptor_set_(std::move(descriptor_set)), layout_(layout) {}
-
-  vk::DescriptorSet get() const noexcept { return *descriptor_set_; }
-  vk::DescriptorSetLayout getLayout() const noexcept { return layout_; }
-  void reset() noexcept {
-    descriptor_set_.reset();
-    layout_ = nullptr;
-  }
-
-private:
-  vk::UniqueDescriptorSet descriptor_set_ = {};
-  vk::DescriptorSetLayout layout_ = {};
-};
-
 class DescriptorSetBuilder final : public DescriptorSetLayoutBuilder {
 public:
   DescriptorSetBuilder(DescriptorSetAllocator &descriptor_allocator,
@@ -121,13 +104,67 @@ public:
     return *this;
   }
 
-  DescriptorSet build();
+  vk::UniqueDescriptorSet build();
 
 private:
   DescriptorSetAllocator *descriptor_allocator_{nullptr};
 
   std::vector<vk::WriteDescriptorSet> bindings_;
 };
+
+class ResourceDescriptorHeap final {
+public:
+  ResourceDescriptorHeap() = default;
+  ResourceDescriptorHeap(vk::Device device, vk::DescriptorType type, uint32_t size,
+                         uint32_t binding = 0);
+
+  vk::DescriptorSetLayout getLayout() const noexcept { return *descriptor_set_layout_; }
+  vk::DescriptorSet get() const noexcept { return descriptor_set_; }
+
+  uint32_t allocate(vk::Buffer buffer, vk::DeviceSize offset = 0,
+                    vk::DeviceSize range = VK_WHOLE_SIZE) {
+    assert(type_ == vk::DescriptorType::eStorageBuffer);
+    auto id = allocate();
+    descriptors_.emplace_back(id, vk::DescriptorBufferInfo{buffer, offset, range});
+    return id;
+  }
+  uint32_t allocate(vk::ImageView image_view, vk::ImageLayout image_layout) {
+    assert(type_ == vk::DescriptorType::eStorageImage ||
+           type_ == vk::DescriptorType::eSampledImage);
+    auto id = allocate();
+    descriptors_.emplace_back(id, vk::DescriptorImageInfo{{}, image_view, image_layout});
+    return id;
+  }
+  uint32_t allocate(vk::Sampler sampler) {
+    assert(type_ == vk::DescriptorType::eSampler);
+    auto id = allocate();
+    descriptors_.emplace_back(id, vk::DescriptorImageInfo{sampler});
+    return id;
+  }
+
+  void free(uint32_t id) { free_list_.push_back(id); }
+
+  void flush();
+  void reset();
+
+private:
+  vk::Device device_;
+  vk::DescriptorType type_;
+  uint32_t size_;
+  uint32_t binding_;
+
+  vk::UniqueDescriptorPool pool_;
+  vk::UniqueDescriptorSetLayout descriptor_set_layout_;
+  vk::DescriptorSet descriptor_set_;
+
+  std::vector<uint32_t> free_list_;
+
+  using DescriptorInfo = std::variant<vk::DescriptorBufferInfo, vk::DescriptorImageInfo>;
+  std::vector<std::pair<uint32_t, DescriptorInfo>> descriptors_;
+
+  uint32_t allocate();
+};
+
 } // namespace gfx
 
 #endif

@@ -35,13 +35,14 @@ getDescriptorSetLayoutBindings(const SpvReflectDescriptorSet *set, vk::ShaderSta
   return res;
 }
 
-DescriptorSetLayouts ShaderModule::getDescriptorSetLayouts() const {
+std::vector<std::pair<uint32_t, DescriptorSetLayoutBindings>>
+ShaderModule::getDescriptorSetLayouts() const {
   uint32_t count = 0;
   SPV_CHECK(reflection_.EnumerateDescriptorSets(&count, nullptr));
   std::vector<SpvReflectDescriptorSet *> descriptor_sets(count);
   SPV_CHECK(reflection_.EnumerateDescriptorSets(&count, descriptor_sets.data()));
   auto stage = getStage();
-  DescriptorSetLayouts res;
+  std::vector<std::pair<uint32_t, DescriptorSetLayoutBindings>> res;
   std::transform(descriptor_sets.begin(), descriptor_sets.end(), std::back_inserter(res),
                  [&](const SpvReflectDescriptorSet *set) {
                    return std::make_pair(set->set, getDescriptorSetLayoutBindings(set, stage));
@@ -49,19 +50,15 @@ DescriptorSetLayouts ShaderModule::getDescriptorSetLayouts() const {
   return res;
 }
 
-PushConstantRange ShaderModule::getPushConstantRange() const {
+std::optional<vk::PushConstantRange> ShaderModule::getPushConstantRange() const {
   uint32_t count = 0;
   SPV_CHECK(reflection_.EnumeratePushConstantBlocks(&count, nullptr));
   if (!count)
     return {};
-  std::vector<SpvReflectBlockVariable *> push_constant_blocks(count);
-  SPV_CHECK(reflection_.EnumeratePushConstantBlocks(&count, push_constant_blocks.data()));
-  uint32_t left_bound = UINT32_MAX, right_bound = 0;
-  for (const auto &push_constant_block : push_constant_blocks) {
-    left_bound = std::min(left_bound, push_constant_block->offset);
-    right_bound = std::max(right_bound, push_constant_block->offset + push_constant_block->size);
-  }
-  return vk::PushConstantRange{getStage(), left_bound, right_bound - left_bound};
+  assert(count == 1);
+  SpvReflectBlockVariable *push_constant_block;
+  SPV_CHECK(reflection_.EnumeratePushConstantBlocks(&count, &push_constant_block));
+  return vk::PushConstantRange{getStage(), push_constant_block->offset, push_constant_block->size};
 };
 
 ShaderModule ShaderModuleCache::create(const std::string &name) {

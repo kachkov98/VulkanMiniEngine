@@ -18,15 +18,17 @@ protected:
   void execute(gfx::Frame &frame) override;
 
 private:
-  struct PushConstant {
+  struct TransformData {
     glm::vec2 scale, translate;
+  };
+  struct ResourceIndices {
+    uint32_t textureIdx, samplerIdx;
   };
 
   gfx::Pipeline pipeline_;
   vma::UniqueImage font_texture_;
   vk::UniqueImageView font_texture_view_;
   vk::UniqueSampler font_sampler_;
-  gfx::DescriptorSet descriptor_set_;
 };
 } // namespace rg
 

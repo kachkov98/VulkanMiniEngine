@@ -143,8 +143,19 @@ Context::Context(const wsi::Window &window) {
     device_ = physical_device_.createDeviceUnique(vk::StructureChain{
         vk::DeviceCreateInfo{{}, queue_create_info, {}, enabled_extensions_},
         vk::PhysicalDeviceVulkan11Features{}.setShaderDrawParameters(true),
-        vk::PhysicalDeviceVulkan12Features{}.setBufferDeviceAddress(true).setDrawIndirectCount(
-            true),
+        vk::PhysicalDeviceVulkan12Features{}
+            .setBufferDeviceAddress(true)
+            .setDrawIndirectCount(true)
+            .setDescriptorIndexing(true)
+            .setShaderStorageBufferArrayNonUniformIndexing(true)
+            .setShaderStorageImageArrayNonUniformIndexing(true)
+            .setShaderSampledImageArrayNonUniformIndexing(true)
+            .setDescriptorBindingStorageBufferUpdateAfterBind(true)
+            .setDescriptorBindingStorageImageUpdateAfterBind(true)
+            .setDescriptorBindingSampledImageUpdateAfterBind(true)
+            .setDescriptorBindingUpdateUnusedWhilePending(true)
+            .setDescriptorBindingPartiallyBound(true)
+            .setRuntimeDescriptorArray(true),
         vk::PhysicalDeviceVulkan13Features{}.setSynchronization2(true).setDynamicRendering(true)}
                                                       .get());
     VULKAN_HPP_DEFAULT_DISPATCHER.init(*device_);
@@ -153,10 +164,18 @@ Context::Context(const wsi::Window &window) {
   recreateSwapchain(window.getFramebufferSize());
   // Create resource caches
   descriptor_set_layout_cache_ = DescriptorSetLayoutCache(*device_);
-  descriptor_set_allocator_ = DescriptorSetAllocator(*device_);
   shader_module_cache_ = ShaderModuleCache(*device_);
   pipeline_layout_cache_ = PipelineLayoutCache(*device_);
   pipeline_cache_ = PipelineCache(*device_);
+  // Create resource descriptor heaps
+  buffer_descriptor_heap_ =
+      ResourceDescriptorHeap(*device_, vk::DescriptorType::eStorageBuffer, 1024 * 1024);
+  image_descriptor_heap_ =
+      ResourceDescriptorHeap(*device_, vk::DescriptorType::eStorageImage, 1024 * 1024);
+  texture_descriptor_heap_ =
+      ResourceDescriptorHeap(*device_, vk::DescriptorType::eSampledImage, 1024 * 1024);
+  sampler_descriptor_heap_ =
+      ResourceDescriptorHeap(*device_, vk::DescriptorType::eSampler, 1024 * 1024);
   // Create allocator
   {
     VmaVulkanFunctions vma_vk_funcs{};
@@ -176,7 +195,7 @@ Context::Context(const wsi::Window &window) {
     allocator_->setCurrentFrameIndex(current_frame_);
   }
   // Create staging buffer
-  staging_buffer_ = std::move(StagingBuffer(*device_, queue_family_index_, 0, *allocator_));
+  staging_buffer_ = StagingBuffer(*device_, queue_family_index_, 0, *allocator_);
   // Create in-flight frames
   for (auto &frame : frames_)
     frame = Frame(physical_device_, *device_, queue_family_index_, 0, *allocator_);

@@ -36,13 +36,18 @@ public:
         descriptor_set_layout_cache_(&descriptor_set_layout_cache) {}
 
   PipelineLayoutBuilder &shaderStage(const ShaderModule &shader_module);
+  PipelineLayoutBuilder &resourceDescriptorHeap(uint32_t id, vk::DescriptorSetLayout layout) {
+    resource_descriptor_heap_layouts_.emplace(id, layout);
+    return *this;
+  }
   vk::PipelineLayout build();
 
 private:
   PipelineLayoutCache *pipeline_layout_cache_{nullptr};
   DescriptorSetLayoutCache *descriptor_set_layout_cache_{nullptr};
 
-  DescriptorSetLayouts descriptor_set_layouts_;
+  std::unordered_map<uint32_t, DescriptorSetLayoutBindings> descriptor_set_layouts_;
+  std::unordered_map<uint32_t, vk::DescriptorSetLayout> resource_descriptor_heap_layouts_;
   std::vector<vk::PushConstantRange> push_constant_ranges_;
 };
 
@@ -65,8 +70,10 @@ class Pipeline final {
 public:
   Pipeline() = default;
   Pipeline(vk::UniquePipeline &&pipeline, vk::PipelineLayout layout,
-           vk::PipelineBindPoint bind_point)
-      : pipeline_(std::move(pipeline)), layout_(layout), bind_point_(bind_point) {}
+           vk::PipelineBindPoint bind_point,
+           std::vector<std::pair<const uint32_t, vk::DescriptorSet>> &&resource_descriptor_heaps)
+      : pipeline_(std::move(pipeline)), layout_(layout), bind_point_(bind_point),
+        resource_descriptor_heaps_(resource_descriptor_heaps) {}
 
   vk::Pipeline get() const noexcept { return *pipeline_; }
   vk::PipelineLayout getLayout() const noexcept { return layout_; }
@@ -76,11 +83,16 @@ public:
     bind_point_ = {};
   }
 
-  void bind(vk::CommandBuffer cmd_buf) const { cmd_buf.bindPipeline(bind_point_, *pipeline_); };
+  void bind(vk::CommandBuffer cmd_buf) const {
+    cmd_buf.bindPipeline(bind_point_, *pipeline_);
+    for (const auto &[id, descriptor_set] : resource_descriptor_heaps_)
+      cmd_buf.bindDescriptorSets(bind_point_, layout_, id, descriptor_set, {});
+  };
 
-  void bindDesriptorSet(vk::CommandBuffer cmd_buf, uint32_t id, vk::DescriptorSet descriptor_set,
-                        const vk::ArrayProxy<const uint32_t> &dynamic_offsets = {}) const {
-    cmd_buf.bindDescriptorSets(bind_point_, layout_, id, descriptor_set, dynamic_offsets);
+  void bindDesriptorSets(vk::CommandBuffer cmd_buf, uint32_t id,
+                         const vk::ArrayProxy<const vk::DescriptorSet> &descriptor_sets,
+                         const vk::ArrayProxy<const uint32_t> &dynamic_offsets = {}) const {
+    cmd_buf.bindDescriptorSets(bind_point_, layout_, id, descriptor_sets, dynamic_offsets);
   };
 
   template <typename DataType>
@@ -93,6 +105,8 @@ private:
   vk::UniquePipeline pipeline_ = {};
   vk::PipelineLayout layout_ = {};
   vk::PipelineBindPoint bind_point_ = {};
+
+  std::vector<std::pair<const uint32_t, vk::DescriptorSet>> resource_descriptor_heaps_;
 };
 
 template <typename Derived> class PipelineBuilder : public PipelineLayoutBuilder {
@@ -106,21 +120,32 @@ public:
                        const vk::SpecializationInfo *specialization_info = nullptr) {
     auto stage = shader_module.getStage();
     assert(stage | Derived::shader_stages);
-    shader_stages_.try_emplace(stage, vk::PipelineShaderStageCreateFlags{}, stage,
-                               shader_module.get(), shader_module.getName(), specialization_info);
+    shader_stages_.emplace(
+        stage, vk::PipelineShaderStageCreateInfo{
+                   {}, stage, shader_module.get(), shader_module.getName(), specialization_info});
     PipelineLayoutBuilder::shaderStage(shader_module);
     return static_cast<Derived &>(*this);
   }
 
+  Derived &resourceDescriptorHeap(uint32_t id, const ResourceDescriptorHeap &heap) {
+    resource_descriptor_heaps_.emplace(id, heap.get());
+    PipelineLayoutBuilder::resourceDescriptorHeap(id, heap.getLayout());
+    return static_cast<Derived &>(*this);
+  }
+
   Pipeline build() {
+    std::vector resource_descriptor_heaps(resource_descriptor_heaps_.begin(),
+                                          resource_descriptor_heaps_.end());
     auto layout = PipelineLayoutBuilder::build();
-    return Pipeline(static_cast<Derived *>(this)->create(layout), layout, Derived::bind_point);
+    return Pipeline(static_cast<Derived *>(this)->create(layout), layout, Derived::bind_point,
+                    std::move(resource_descriptor_heaps));
   }
 
 protected:
   PipelineCache *pipeline_cache_{nullptr};
 
   std::unordered_map<vk::ShaderStageFlagBits, vk::PipelineShaderStageCreateInfo> shader_stages_;
+  std::unordered_map<uint32_t, vk::DescriptorSet> resource_descriptor_heaps_;
 };
 
 class ComputePipelineBuilder final : public PipelineBuilder<ComputePipelineBuilder> {

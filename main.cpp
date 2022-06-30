@@ -24,7 +24,13 @@ private:
   void onInit() override {
     ImGui_ImplGlfw_InitForVulkan(vme::Engine::get<wsi::Window>().getHandle(), true);
     pass_ = std::make_unique<rg::ImGuiPass>();
-    vme::Engine::get<gfx::Context>().getStagingBuffer().flush();
+    // Flush all pending operations
+    auto &context = vme::Engine::get<gfx::Context>();
+    context.getBufferDescriptorHeap().flush();
+    context.getImageDescriptorHeap().flush();
+    context.getTextureDescriptorHeap().flush();
+    context.getSamplerDescriptorHeap().flush();
+    context.getStagingBuffer().flush();
   }
 
   void onTerminate() override {

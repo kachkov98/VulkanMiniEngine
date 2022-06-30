@@ -42,10 +42,14 @@ public:
   DescriptorSetLayoutCache &getDescriptorSetLayoutCache() noexcept {
     return descriptor_set_layout_cache_;
   }
-  DescriptorSetAllocator &getDescriptorSetAllocator() noexcept { return descriptor_set_allocator_; }
   ShaderModuleCache &getShaderModuleCache() noexcept { return shader_module_cache_; }
   PipelineLayoutCache &getPipelineLayoutCache() noexcept { return pipeline_layout_cache_; }
   PipelineCache &getPipelineCache() noexcept { return pipeline_cache_; }
+
+  ResourceDescriptorHeap &getBufferDescriptorHeap() noexcept { return buffer_descriptor_heap_; }
+  ResourceDescriptorHeap &getImageDescriptorHeap() noexcept { return image_descriptor_heap_; }
+  ResourceDescriptorHeap &getTextureDescriptorHeap() noexcept { return texture_descriptor_heap_; }
+  ResourceDescriptorHeap &getSamplerDescriptorHeap() noexcept { return sampler_descriptor_heap_; }
 
   vma::Allocator getAllocator() const noexcept { return *allocator_; }
 
@@ -77,10 +81,14 @@ private:
   std::vector<vk::UniqueImageView> swapchain_image_views_{};
 
   DescriptorSetLayoutCache descriptor_set_layout_cache_;
-  DescriptorSetAllocator descriptor_set_allocator_;
   ShaderModuleCache shader_module_cache_;
   PipelineLayoutCache pipeline_layout_cache_;
   PipelineCache pipeline_cache_;
+
+  ResourceDescriptorHeap buffer_descriptor_heap_;
+  ResourceDescriptorHeap image_descriptor_heap_;
+  ResourceDescriptorHeap texture_descriptor_heap_;
+  ResourceDescriptorHeap sampler_descriptor_heap_;
 
   vma::UniqueAllocator allocator_ = {};
 

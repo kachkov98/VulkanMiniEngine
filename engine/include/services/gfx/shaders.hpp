@@ -13,8 +13,6 @@
 
 namespace gfx {
 using DescriptorSetLayoutBindings = std::vector<vk::DescriptorSetLayoutBinding>;
-using DescriptorSetLayouts = std::vector<std::pair<uint32_t, DescriptorSetLayoutBindings>>;
-using PushConstantRange = std::optional<vk::PushConstantRange>;
 
 class ShaderModule final {
 public:
@@ -30,8 +28,8 @@ public:
     return static_cast<vk::ShaderStageFlagBits>(reflection_.GetShaderStage());
   };
 
-  DescriptorSetLayouts getDescriptorSetLayouts() const;
-  PushConstantRange getPushConstantRange() const;
+  std::vector<std::pair<uint32_t, DescriptorSetLayoutBindings>> getDescriptorSetLayouts() const;
+  std::optional<vk::PushConstantRange> getPushConstantRange() const;
 
 private:
   vk::UniqueShaderModule shader_module_;

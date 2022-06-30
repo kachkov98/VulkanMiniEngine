@@ -20,8 +20,10 @@ std::vector<Value> getFlattenedVector(const std::unordered_map<Key, Value> &map)
 
 PipelineLayoutBuilder &PipelineLayoutBuilder::shaderStage(const ShaderModule &shader_module) {
   const auto &descriptor_set_layouts = shader_module.getDescriptorSetLayouts();
-  descriptor_set_layouts_.insert(descriptor_set_layouts_.end(), descriptor_set_layouts.begin(),
-                                 descriptor_set_layouts.end());
+  for (const auto &[id, bindings] : descriptor_set_layouts_) {
+    auto &set_bindings = descriptor_set_layouts_[id];
+    set_bindings.insert(set_bindings.end(), bindings.begin(), bindings.end());
+  }
   if (auto push_constant_range = shader_module.getPushConstantRange())
     push_constant_ranges_.push_back(*push_constant_range);
   return *this;
@@ -40,20 +42,24 @@ mergeDescriptorSetLayoutBindings(const DescriptorSetLayoutBindings &bindings) {
 
 vk::PipelineLayout PipelineLayoutBuilder::build() {
   // Merge descriptor set layouts
-  unsigned num_descriptor_sets = 0;
+  uint32_t num_descriptor_sets = 0;
   for (const auto &[id, bindings] : descriptor_set_layouts_)
     num_descriptor_sets = std::max(num_descriptor_sets, id + 1);
-  std::vector<DescriptorSetLayoutBindings> descriptor_set_layouts(num_descriptor_sets);
-  for (const auto &[id, bindings] : descriptor_set_layouts_)
-    std::copy(bindings.begin(), bindings.end(), std::back_inserter(descriptor_set_layouts[id]));
-
-  std::vector<vk::DescriptorSetLayout> merged_descriptor_set_layouts;
-  std::transform(descriptor_set_layouts.begin(), descriptor_set_layouts.end(),
-                 std::back_inserter(merged_descriptor_set_layouts),
-                 [&](const DescriptorSetLayoutBindings &bindings) {
-                   auto merged_bindings = mergeDescriptorSetLayoutBindings(bindings);
-                   return *descriptor_set_layout_cache_->get({{}, merged_bindings});
-                 });
+  for (const auto &[id, layout] : resource_descriptor_heap_layouts_)
+    num_descriptor_sets = std::max(num_descriptor_sets, id + 1);
+  // TODO: check that num_descriptor_sets doesn't exceed physical device limits
+  std::vector<vk::DescriptorSetLayout> merged_descriptor_set_layouts(num_descriptor_sets);
+  for (uint32_t id = 0; id < num_descriptor_sets; ++id) {
+    if (auto it = resource_descriptor_heap_layouts_.find(id);
+        it != resource_descriptor_heap_layouts_.end()) {
+      merged_descriptor_set_layouts[id] = it->second;
+      continue;
+    }
+    DescriptorSetLayoutBindings merged_bindigns{};
+    if (auto it = descriptor_set_layouts_.find(id); it != descriptor_set_layouts_.end())
+      merged_bindigns = mergeDescriptorSetLayoutBindings(it->second);
+    merged_descriptor_set_layouts[id] = *descriptor_set_layout_cache_->get({{}, merged_bindigns});
+  }
 
   return *pipeline_layout_cache_->get({{}, merged_descriptor_set_layouts, push_constant_ranges_});
 };
