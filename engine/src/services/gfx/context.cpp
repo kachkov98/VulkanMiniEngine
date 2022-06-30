@@ -250,19 +250,15 @@ bool Context::isExtensionEnabled(std::string_view name) const noexcept {
          enabled_extensions_.end();
 }
 
-void Context::acquireNextImage(vk::Semaphore image_available) {
+vk::Result Context::acquireNextImage(vk::Semaphore image_available) noexcept {
   ZoneScopedN("acquireNextImage");
-  auto [res, index] = device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, image_available, {});
-  current_swapchain_image_ = index;
-  if (res != vk::Result::eSuccess)
-    spdlog::warn("[gfx] acquireNextImage - {}", vk::to_string(res));
+  return device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, image_available, {},
+                                      &current_swapchain_image_);
 }
 
-void Context::presentImage(vk::Semaphore render_finished) {
+vk::Result Context::presentImage(vk::Semaphore render_finished) const noexcept {
   ZoneScopedN("presentImage");
-  auto res = device_->getQueue(queue_family_index_, 0)
-                 .presentKHR({render_finished, *swapchain_, current_swapchain_image_});
-  if (res != vk::Result::eSuccess)
-    spdlog::warn("[gfx] presentImage - {}", vk::to_string(res));
+  vk::PresentInfoKHR present_info{render_finished, *swapchain_, current_swapchain_image_};
+  return device_->getQueue(queue_family_index_, 0).presentKHR(&present_info);
 }
 } // namespace gfx

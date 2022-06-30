@@ -59,58 +59,70 @@ private:
     auto &frame = context.getCurrentFrame();
     auto cmd_buf = frame.getCommandBuffer();
     auto extent = context.getSwapchainExtent();
-    try {
-      context.acquireNextImage(frame.getImageAvailableSemaphore());
-      frame.reset();
-      vk::RenderingAttachmentInfo color_attachment{
-          context.getCurrentImageView(),
-          vk::ImageLayout::eColorAttachmentOptimal,
-          vk::ResolveModeFlagBits::eNone,
-          {},
-          vk::ImageLayout::eUndefined,
-          vk::AttachmentLoadOp::eClear,
-          vk::AttachmentStoreOp::eStore,
-          vk::ClearValue(vk::ClearColorValue(std::array{0.f, 0.f, 1.f, 0.f}))};
-      vk::ImageMemoryBarrier2 image_barrier1{
-          vk::PipelineStageFlagBits2::eTopOfPipe,
-          vk::AccessFlagBits2::eNone,
-          vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-          vk::AccessFlagBits2::eColorAttachmentWrite,
-          vk::ImageLayout::eUndefined,
-          vk::ImageLayout::eColorAttachmentOptimal,
-          {},
-          {},
-          context.getCurrentImage(),
-          vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
-      vk::ImageMemoryBarrier2 image_barrier2{
-          vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-          vk::AccessFlagBits2::eColorAttachmentWrite,
-          vk::PipelineStageFlagBits2::eBottomOfPipe,
-          vk::AccessFlagBits2::eNone,
-          vk::ImageLayout::eColorAttachmentOptimal,
-          vk::ImageLayout::ePresentSrcKHR,
-          {},
-          {},
-          context.getCurrentImage(),
-          vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
-      cmd_buf.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-      cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier1});
-      pass_->doExecute(frame);
-      cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier2});
-      TracyVkCollect(frame.getTracyVkCtx(), cmd_buf);
-      cmd_buf.end();
-      frame.submit();
-      context.presentImage(frame.getRenderFinishedSemaphore());
-    } catch (vk::OutOfDateKHRError &) {
-      auto &context = vme::Engine::get<gfx::Context>();
-      auto &window = vme::Engine::get<wsi::Window>();
-      context.waitIdle();
-      context.recreateSwapchain(window.getFramebufferSize());
-    }
+    if (recreateSwapchainIfNeeded(context.acquireNextImage(frame.getImageAvailableSemaphore())))
+      return;
+    frame.reset();
+    vk::RenderingAttachmentInfo color_attachment{
+        context.getCurrentImageView(),
+        vk::ImageLayout::eColorAttachmentOptimal,
+        vk::ResolveModeFlagBits::eNone,
+        {},
+        vk::ImageLayout::eUndefined,
+        vk::AttachmentLoadOp::eClear,
+        vk::AttachmentStoreOp::eStore,
+        vk::ClearValue(vk::ClearColorValue(std::array{0.f, 0.f, 1.f, 0.f}))};
+    vk::ImageMemoryBarrier2 image_barrier1{
+        vk::PipelineStageFlagBits2::eTopOfPipe,
+        vk::AccessFlagBits2::eNone,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eColorAttachmentOptimal,
+        {},
+        {},
+        context.getCurrentImage(),
+        vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+    vk::ImageMemoryBarrier2 image_barrier2{
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        vk::PipelineStageFlagBits2::eBottomOfPipe,
+        vk::AccessFlagBits2::eNone,
+        vk::ImageLayout::eColorAttachmentOptimal,
+        vk::ImageLayout::ePresentSrcKHR,
+        {},
+        {},
+        context.getCurrentImage(),
+        vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+    cmd_buf.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier1});
+    pass_->doExecute(frame);
+    cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier2});
+    TracyVkCollect(frame.getTracyVkCtx(), cmd_buf);
+    cmd_buf.end();
+    frame.submit();
+    if (recreateSwapchainIfNeeded(context.presentImage(frame.getRenderFinishedSemaphore())))
+      return;
   }
 
 private:
   std::unique_ptr<rg::Pass> pass_;
+
+  bool recreateSwapchainIfNeeded(vk::Result result) const {
+    switch (result) {
+    case vk::Result::eSuccess:
+      return false;
+    case vk::Result::eErrorOutOfDateKHR:
+    case vk::Result::eSuboptimalKHR: {
+      auto &context = vme::Engine::get<gfx::Context>();
+      auto &window = vme::Engine::get<wsi::Window>();
+      context.waitIdle();
+      context.recreateSwapchain(window.getFramebufferSize());
+      return true;
+    }
+    default:
+      vk::throwResultException(result, "recreateSwapchainIfNeeded");
+    }
+  }
 };
 
 int main(int argc, char *argv[]) {

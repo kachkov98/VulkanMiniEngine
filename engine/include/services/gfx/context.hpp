@@ -36,8 +36,8 @@ public:
     return *swapchain_image_views_[current_swapchain_image_];
   }
   vk::Extent2D getSwapchainExtent() const noexcept { return swapchain_extent_; };
-  void acquireNextImage(vk::Semaphore image_available);
-  void presentImage(vk::Semaphore render_finished);
+  vk::Result acquireNextImage(vk::Semaphore image_available) noexcept;
+  vk::Result presentImage(vk::Semaphore render_finished) const noexcept;
 
   DescriptorSetLayoutCache &getDescriptorSetLayoutCache() noexcept {
     return descriptor_set_layout_cache_;
