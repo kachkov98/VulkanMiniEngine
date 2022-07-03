@@ -40,6 +40,7 @@ Frame::Frame(vk::PhysicalDevice physical_device, vk::Device device, uint32_t que
 }
 
 void Frame::submit() const {
+  ZoneScoped;
   vk::PipelineStageFlags wait_stage_mask = vk::PipelineStageFlagBits::eAllCommands;
   queue_.submit(
       vk::SubmitInfo{*image_available_, wait_stage_mask, *command_buffer_, *render_finished_},
@@ -47,6 +48,7 @@ void Frame::submit() const {
 }
 
 void Frame::reset() {
+  ZoneScoped;
   if (device_.waitForFences(*render_fence_, VK_TRUE, UINT64_MAX) == vk::Result::eTimeout)
     throw std::runtime_error("Unexpected render fence timeout");
   device_.resetFences({*render_fence_});

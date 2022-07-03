@@ -29,10 +29,10 @@ vk::DescriptorPool DescriptorSetAllocator::getPool(unsigned size) {
   return *used_pools_.back();
 }
 
-vk::UniqueDescriptorSet
+vk::DescriptorSet
 DescriptorSetAllocator::allocate(const vk::DescriptorSetLayout &descriptor_layout,
                                  const vk::ArrayProxy<const vk::WriteDescriptorSet> &bindings) {
-  vk::DescriptorSet descriptor_set;
+  vk::DescriptorSet descriptor_set{};
   if (!current_pool_)
     current_pool_ = getPool();
   vk::DescriptorSetAllocateInfo alloc_info{current_pool_, descriptor_layout};
@@ -41,14 +41,13 @@ DescriptorSetAllocator::allocate(const vk::DescriptorSetLayout &descriptor_layou
     alloc_info.descriptorPool = current_pool_ = getPool();
     result = device_.allocateDescriptorSets(&alloc_info, &descriptor_set);
   }
-  auto deleter = vk::PoolFree(device_, current_pool_, VULKAN_HPP_DEFAULT_DISPATCHER);
   std::vector<vk::WriteDescriptorSet> writes(bindings.begin(), bindings.end());
   for (auto &write : writes) {
     assert(!write.dstSet);
     write.dstSet = descriptor_set;
   }
   device_.updateDescriptorSets(writes, {});
-  return vk::UniqueDescriptorSet(descriptor_set, deleter);
+  return descriptor_set;
 }
 
 void DescriptorSetAllocator::reset() {
@@ -60,55 +59,7 @@ void DescriptorSetAllocator::reset() {
   current_pool_ = nullptr;
 }
 
-vk::UniqueDescriptorSet DescriptorSetBuilder::build() {
+vk::DescriptorSet DescriptorSetBuilder::build() {
   return descriptor_allocator_->allocate(DescriptorSetLayoutBuilder::build(), bindings_);
 }
-
-ResourceDescriptorHeap::ResourceDescriptorHeap(vk::Device device, vk::DescriptorType type,
-                                               uint32_t size, uint32_t binding)
-    : device_(device), type_(type), size_(size), binding_(binding) {
-  vk::DescriptorPoolSize pool_size{type, size};
-  pool_ = device_.createDescriptorPoolUnique(
-      {vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind, 1, pool_size});
-  vk::DescriptorSetLayoutBinding layout_binding{binding_, type_, size_,
-                                                vk::ShaderStageFlagBits::eAll};
-  vk::DescriptorBindingFlags binding_flags =
-      vk::DescriptorBindingFlagBits::eUpdateAfterBind |
-      vk::DescriptorBindingFlagBits::eUpdateUnusedWhilePending |
-      vk::DescriptorBindingFlagBits::ePartiallyBound;
-  descriptor_set_layout_ = device_.createDescriptorSetLayoutUnique(vk::StructureChain{
-      vk::DescriptorSetLayoutCreateInfo{vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool,
-                                        layout_binding},
-      vk::DescriptorSetLayoutBindingFlagsCreateInfo{binding_flags}}.get());
-  descriptor_set_ = device_.allocateDescriptorSets({*pool_, *descriptor_set_layout_}).front();
-  reset();
-}
-
-void ResourceDescriptorHeap::flush() {
-  std::vector<vk::WriteDescriptorSet> writes;
-  writes.reserve(descriptors_.size());
-  for (const auto &[id, descriptor_info] : descriptors_) {
-    writes.emplace_back(descriptor_set_, binding_, id, 1, type_,
-                        std::get_if<vk::DescriptorImageInfo>(&descriptor_info),
-                        std::get_if<vk::DescriptorBufferInfo>(&descriptor_info));
-  }
-  device_.updateDescriptorSets(writes, {});
-  descriptors_.clear();
-};
-void ResourceDescriptorHeap::reset() {
-  descriptors_.clear();
-  free_list_.clear();
-  free_list_.reserve(size_);
-  for (uint32_t i = 0; i < size_; ++i)
-    free_list_.push_back(size_ - i - 1);
-}
-
-uint32_t ResourceDescriptorHeap::allocate() {
-  if (free_list_.empty())
-    throw std::runtime_error("Resource heap exceeded");
-  auto id = free_list_.back();
-  free_list_.pop_back();
-  return id;
-}
-
 } // namespace gfx

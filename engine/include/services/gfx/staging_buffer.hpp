@@ -12,7 +12,7 @@ class StagingBuffer {
 public:
   static constexpr size_t max_size = 128 * 1024 * 1024;
 
-  template <typename T> using Data = vk::ArrayProxy<T>;
+  template <typename T> using Data = vk::ArrayProxy<const T>;
 
   StagingBuffer() = default;
   StagingBuffer(vk::Device device, uint32_t queue_family_index, uint32_t queue_index,

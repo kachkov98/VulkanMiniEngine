@@ -20,7 +20,7 @@ std::vector<Value> getFlattenedVector(const std::unordered_map<Key, Value> &map)
 
 PipelineLayoutBuilder &PipelineLayoutBuilder::shaderStage(const ShaderModule &shader_module) {
   const auto &descriptor_set_layouts = shader_module.getDescriptorSetLayouts();
-  for (const auto &[id, bindings] : descriptor_set_layouts_) {
+  for (const auto &[id, bindings] : descriptor_set_layouts) {
     auto &set_bindings = descriptor_set_layouts_[id];
     set_bindings.insert(set_bindings.end(), bindings.begin(), bindings.end());
   }

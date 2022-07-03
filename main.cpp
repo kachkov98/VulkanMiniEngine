@@ -1,5 +1,7 @@
 #include "engine.hpp"
+#include "renderer/forward_pass.hpp"
 #include "renderer/imgui_pass.hpp"
+#include "scene/scene.hpp"
 #include "services/gfx/context.hpp"
 #include "services/wsi/input.hpp"
 #include "services/wsi/window.hpp"
@@ -7,6 +9,8 @@
 #include <GLFW/glfw3.h>
 #include <cxxopts.hpp>
 #include <imgui_impl_glfw.h>
+#include <spdlog/spdlog.h>
+#include <tiny_gltf.h>
 
 #include <chrono>
 #include <thread>
@@ -23,18 +27,31 @@ private:
 
   void onInit() override {
     ImGui_ImplGlfw_InitForVulkan(vme::Engine::get<wsi::Window>().getHandle(), true);
-    pass_ = std::make_unique<rg::ImGuiPass>();
+    // Load model
+    {
+      tinygltf::TinyGLTF loader;
+      tinygltf::Model model;
+      std::string err, warn;
+      if (!loader.LoadBinaryFromFile(&model, &err, &warn, "../../../DamagedHelmet.glb")) {
+        if (!warn.empty())
+          spdlog::warn("[tinygltf] {}", warn);
+        if (!err.empty())
+          spdlog::error("[tinygltf] {}", err);
+        throw std::runtime_error("Failed to parse glTF");
+      }
+      scene_ = std::make_unique<vme::Scene>(vme::Engine::get<gfx::Context>(), model);
+    }
+    // Create pass nodes
+    forward_pass_ = std::make_unique<rg::ForwardPass>(*scene_);
+    imgui_pass_ = std::make_unique<rg::ImGuiPass>();
     // Flush all pending operations
-    auto &context = vme::Engine::get<gfx::Context>();
-    context.getBufferDescriptorHeap().flush();
-    context.getImageDescriptorHeap().flush();
-    context.getTextureDescriptorHeap().flush();
-    context.getSamplerDescriptorHeap().flush();
-    context.getStagingBuffer().flush();
+    vme::Engine::get<gfx::Context>().flush();
   }
 
   void onTerminate() override {
-    pass_.reset();
+    imgui_pass_.reset();
+    forward_pass_.reset();
+    scene_.reset();
     ImGui_ImplGlfw_Shutdown();
   }
 
@@ -85,6 +102,17 @@ private:
     vk::ImageMemoryBarrier2 image_barrier2{
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,
         vk::AccessFlagBits2::eColorAttachmentWrite,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::AccessFlagBits2::eColorAttachmentRead,
+        vk::ImageLayout::eColorAttachmentOptimal,
+        vk::ImageLayout::eColorAttachmentOptimal,
+        {},
+        {},
+        context.getCurrentImage(),
+        vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+    vk::ImageMemoryBarrier2 image_barrier3{
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::AccessFlagBits2::eColorAttachmentWrite,
         vk::PipelineStageFlagBits2::eBottomOfPipe,
         vk::AccessFlagBits2::eNone,
         vk::ImageLayout::eColorAttachmentOptimal,
@@ -95,8 +123,10 @@ private:
         vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
     cmd_buf.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
     cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier1});
-    pass_->doExecute(frame);
+    forward_pass_->doExecute(frame);
     cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier2});
+    imgui_pass_->doExecute(frame);
+    cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier3});
     TracyVkCollect(frame.getTracyVkCtx(), cmd_buf);
     cmd_buf.end();
     frame.submit();
@@ -105,7 +135,8 @@ private:
   }
 
 private:
-  std::unique_ptr<rg::Pass> pass_;
+  std::unique_ptr<vme::Scene> scene_;
+  std::unique_ptr<rg::Pass> forward_pass_, imgui_pass_;
 
   bool recreateSwapchainIfNeeded(vk::Result result) const {
     switch (result) {
@@ -117,6 +148,8 @@ private:
       auto &window = vme::Engine::get<wsi::Window>();
       context.waitIdle();
       context.recreateSwapchain(window.getFramebufferSize());
+      static_cast<rg::ForwardPass *>(forward_pass_.get())
+          ->onSwapchainResize(context.getSwapchainExtent());
       return true;
     }
     default:

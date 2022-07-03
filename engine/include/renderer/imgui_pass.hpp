@@ -3,8 +3,8 @@
 
 #include "render_graph.hpp"
 
-#include "services/gfx/allocator.hpp"
 #include "services/gfx/pipelines.hpp"
+#include "services/gfx/resources.hpp"
 
 #include <glm/vec2.hpp>
 
@@ -26,9 +26,8 @@ private:
   };
 
   gfx::Pipeline pipeline_;
-  vma::UniqueImage font_texture_;
-  vk::UniqueImageView font_texture_view_;
-  vk::UniqueSampler font_sampler_;
+  gfx::Image font_image_;
+  gfx::Sampler font_sampler_;
 };
 } // namespace rg
 

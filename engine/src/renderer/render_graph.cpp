@@ -11,6 +11,7 @@ void Pass::doSetup(PassBuilder &builder) { setup(builder); }
 void Pass::doExecute(gfx::Frame &frame) {
   TracyVkZoneTransient(frame.getTracyVkCtx(), __tracy_gpu_zone, frame.getCommandBuffer(),
                        getName().c_str(), true);
+  ZoneTransientN(___tracy_scoped_zone, getName().c_str(), true);
   execute(frame);
 }
 

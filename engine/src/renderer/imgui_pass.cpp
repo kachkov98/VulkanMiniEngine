@@ -36,7 +36,7 @@ ImGuiPass::ImGuiPass() : Pass("ImGui", vk::PipelineStageFlagBits2::eAllGraphics)
     pipeline_ =
         gfx::GraphicsPipelineBuilder(context.getPipelineCache(), context.getPipelineLayoutCache(),
                                      context.getDescriptorSetLayoutCache())
-            .resourceDescriptorHeap(0, context.getTextureDescriptorHeap())
+            .resourceDescriptorHeap(0, context.getSampledImageDescriptorHeap())
             .resourceDescriptorHeap(1, context.getSamplerDescriptorHeap())
             .shaderStage(shader_module_cache.get("imgui.vert.spv"))
             .shaderStage(shader_module_cache.get("imgui.frag.spv"))
@@ -51,52 +51,47 @@ ImGuiPass::ImGuiPass() : Pass("ImGui", vk::PipelineStageFlagBits2::eAllGraphics)
             .colorAttachment(context.getSurfaceFormat().format, blend_state)
             .build();
   }
-  // Create font texture
+  // Create font resources
   {
     unsigned char *pixels;
     int width, height, bytes_per_pixel;
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height, &bytes_per_pixel);
-    const vk::Extent3D texture_extent{static_cast<uint32_t>(width), static_cast<uint32_t>(height),
-                                      1};
-    const vk::Format texture_format = vk::Format::eR8G8B8A8Unorm;
+    const vk::Extent3D image_extent{static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
+    const vk::Format image_format = vk::Format::eR8G8B8A8Unorm;
     const vk::ImageSubresourceLayers subresource_layers{vk::ImageAspectFlagBits::eColor, 0, 0, 1};
     const vk::ImageSubresourceRange subresource_range{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
-    font_texture_ = context.getAllocator().createImageUnique(
-        {{},
-         vk::ImageType::e2D,
-         texture_format,
-         texture_extent,
-         1,
-         1,
-         vk::SampleCountFlagBits::e1,
-         vk::ImageTiling::eOptimal,
-         vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled},
-        {{}, VMA_MEMORY_USAGE_AUTO});
-    context.getStagingBuffer().uploadImage(
-        font_texture_->getImage(), vk::ImageLayout::eUndefined,
+    // Create image
+    font_image_ = gfx::Image(context.getAllocator(), {{},
+                                                      vk::ImageType::e2D,
+                                                      image_format,
+                                                      image_extent,
+                                                      1,
+                                                      1,
+                                                      vk::SampleCountFlagBits::e1,
+                                                      vk::ImageTiling::eOptimal,
+                                                      vk::ImageUsageFlagBits::eTransferDst |
+                                                          vk::ImageUsageFlagBits::eSampled});
+    font_image_.upload(
+        context.getStagingBuffer(), vk::ImageLayout::eUndefined,
         vk::ImageLayout::eShaderReadOnlyOptimal, subresource_range,
         gfx::StagingBuffer::Data<unsigned char>{
             static_cast<uint32_t>(width * height * bytes_per_pixel), pixels},
-        vk::BufferImageCopy2{0, 0, 0, subresource_layers, vk::Offset3D{}, texture_extent});
-    // Create font texture view
-    font_texture_view_ = context.getDevice().createImageViewUnique({{},
-                                                                    font_texture_->getImage(),
-                                                                    vk::ImageViewType::e2D,
-                                                                    texture_format,
-                                                                    {},
-                                                                    subresource_range});
+        vk::BufferImageCopy2{0, 0, 0, subresource_layers, vk::Offset3D{}, image_extent});
+    uint32_t texture_index =
+        font_image_.allocate(context.getSampledImageDescriptorHeap(),
+                             {vk::ImageViewType::e2D, image_format, {}, subresource_range},
+                             vk::ImageLayout::eShaderReadOnlyOptimal);
+    // Create sampler
+    font_sampler_ = gfx::Sampler(
+        context.getDevice(),
+        {{}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear});
+    uint32_t sampler_index = font_sampler_.allocate(context.getSamplerDescriptorHeap());
+    // Set ImTextureID
+    static_assert(sizeof(ImTextureID) == sizeof(uint64_t),
+                  "Can not pack texture and sampler index into ImTextureID");
+    uint64_t packed_index = ((uint64_t)texture_index << 32) | sampler_index;
+    ImGui::GetIO().Fonts->SetTexID(reinterpret_cast<ImTextureID>(packed_index));
   }
-  // Create font sampler
-  font_sampler_ = context.getDevice().createSamplerUnique(
-      {{}, vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear});
-
-  uint32_t texture_index = context.getTextureDescriptorHeap().allocate(
-      *font_texture_view_, vk::ImageLayout::eShaderReadOnlyOptimal);
-  uint32_t sampler_index = context.getSamplerDescriptorHeap().allocate(*font_sampler_);
-  uint64_t packed_index = ((uint64_t)texture_index << 32) | sampler_index;
-  static_assert(sizeof(ImTextureID) == sizeof(uint64_t),
-                "Can not pack texture and sampler index into ImTextureID");
-  ImGui::GetIO().Fonts->SetTexID(reinterpret_cast<ImTextureID>(packed_index));
 }
 
 void ImGuiPass::setup(PassBuilder &builder){};
@@ -118,15 +113,8 @@ void ImGuiPass::execute(gfx::Frame &frame) {
       vk::BufferUsageFlagBits::eIndexBuffer, draw_data->TotalIdxCount);
 
   auto cmd_buf = frame.getCommandBuffer();
-  vk::RenderingAttachmentInfo color_attachment{
-      context.getCurrentImageView(),
-      vk::ImageLayout::eColorAttachmentOptimal,
-      vk::ResolveModeFlagBits::eNone,
-      {},
-      vk::ImageLayout::eUndefined,
-      vk::AttachmentLoadOp::eClear,
-      vk::AttachmentStoreOp::eStore,
-      vk::ClearValue(vk::ClearColorValue(std::array{0.f, 0.25f, 1.f, 0.f}))};
+  vk::RenderingAttachmentInfo color_attachment{context.getCurrentImageView(),
+                                               vk::ImageLayout::eColorAttachmentOptimal};
   cmd_buf.beginRendering(
       {vk::RenderingFlags{}, vk::Rect2D{{}, context.getSwapchainExtent()}, 1, 0, color_attachment});
   pipeline_.bind(cmd_buf);

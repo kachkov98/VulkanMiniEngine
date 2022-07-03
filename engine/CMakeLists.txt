@@ -3,6 +3,7 @@ add_library(engine STATIC)
 target_sources(engine
   PRIVATE
     "src/engine.cpp"
+    "src/scene/scene.cpp"
     "src/services/wsi/window.cpp"
     "src/services/wsi/input.cpp"
     "src/services/gfx/context.cpp"
@@ -10,9 +11,11 @@ target_sources(engine
     "src/services/gfx/allocator.cpp"
     "src/services/gfx/descriptors.cpp"
     "src/services/gfx/pipelines.cpp"
+    "src/services/gfx/resources.cpp"
     "src/services/gfx/shaders.cpp"
     "src/services/gfx/staging_buffer.cpp"
     "src/renderer/render_graph.cpp"
+    "src/renderer/forward_pass.cpp"
     "src/renderer/imgui_pass.cpp"
     "src/renderer/present_pass.cpp")
 

@@ -3,6 +3,7 @@
 
 #include "frame.hpp"
 #include "pipelines.hpp"
+#include "resources.hpp"
 #include "shaders.hpp"
 #include "staging_buffer.hpp"
 
@@ -46,10 +47,18 @@ public:
   PipelineLayoutCache &getPipelineLayoutCache() noexcept { return pipeline_layout_cache_; }
   PipelineCache &getPipelineCache() noexcept { return pipeline_cache_; }
 
-  ResourceDescriptorHeap &getBufferDescriptorHeap() noexcept { return buffer_descriptor_heap_; }
-  ResourceDescriptorHeap &getImageDescriptorHeap() noexcept { return image_descriptor_heap_; }
-  ResourceDescriptorHeap &getTextureDescriptorHeap() noexcept { return texture_descriptor_heap_; }
-  ResourceDescriptorHeap &getSamplerDescriptorHeap() noexcept { return sampler_descriptor_heap_; }
+  BufferDescriptorHeap &getStorageBufferDescriptorHeap() noexcept {
+    return storage_buffer_descriptor_heap_;
+  }
+  ImageDescriptorHeap &getStorageImageDescriptorHeap() noexcept {
+    return storage_image_descriptor_heap_;
+  }
+  ImageDescriptorHeap &getSampledImageDescriptorHeap() noexcept {
+    return sampled_image_descriptor_heap_;
+  }
+  SamplerDescriptorHeap &getSamplerDescriptorHeap() noexcept { return sampler_descriptor_heap_; }
+
+  DescriptorSetAllocator &getDescriptorSetAllocator() noexcept { return descriptor_set_allocator_; }
 
   vma::Allocator getAllocator() const noexcept { return *allocator_; }
 
@@ -59,6 +68,8 @@ public:
   void nextFrame() noexcept { allocator_->setCurrentFrameIndex(++current_frame_); }
 
   void waitIdle() const noexcept { device_->waitIdle(); }
+
+  void flush();
 
 private:
   vk::UniqueInstance instance_ = {};
@@ -85,10 +96,12 @@ private:
   PipelineLayoutCache pipeline_layout_cache_;
   PipelineCache pipeline_cache_;
 
-  ResourceDescriptorHeap buffer_descriptor_heap_;
-  ResourceDescriptorHeap image_descriptor_heap_;
-  ResourceDescriptorHeap texture_descriptor_heap_;
-  ResourceDescriptorHeap sampler_descriptor_heap_;
+  BufferDescriptorHeap storage_buffer_descriptor_heap_;
+  ImageDescriptorHeap storage_image_descriptor_heap_;
+  ImageDescriptorHeap sampled_image_descriptor_heap_;
+  SamplerDescriptorHeap sampler_descriptor_heap_;
+
+  DescriptorSetAllocator descriptor_set_allocator_;
 
   vma::UniqueAllocator allocator_ = {};
 

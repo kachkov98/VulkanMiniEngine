@@ -120,7 +120,7 @@ Context::Context(const wsi::Window &window) {
       throw std::runtime_error("glfwCreateWindowSurface failed");
     surface_ = vk::UniqueSurfaceKHR(surface, *instance_);
     surface_format_ =
-        vk::SurfaceFormatKHR{vk::Format::eB8G8R8A8Srgb, vk::ColorSpaceKHR::eSrgbNonlinear};
+        vk::SurfaceFormatKHR{vk::Format::eB8G8R8A8Unorm, vk::ColorSpaceKHR::eSrgbNonlinear};
     std::vector<vk::SurfaceFormatKHR> formats = physical_device_.getSurfaceFormatsKHR(*surface_);
     if (std::none_of(formats.begin(), formats.end(),
                      [&](const auto &surface_format) { return surface_format == surface_format_; }))
@@ -168,14 +168,16 @@ Context::Context(const wsi::Window &window) {
   pipeline_layout_cache_ = PipelineLayoutCache(*device_);
   pipeline_cache_ = PipelineCache(*device_);
   // Create resource descriptor heaps
-  buffer_descriptor_heap_ =
-      ResourceDescriptorHeap(*device_, vk::DescriptorType::eStorageBuffer, 1024 * 1024);
-  image_descriptor_heap_ =
-      ResourceDescriptorHeap(*device_, vk::DescriptorType::eStorageImage, 1024 * 1024);
-  texture_descriptor_heap_ =
-      ResourceDescriptorHeap(*device_, vk::DescriptorType::eSampledImage, 1024 * 1024);
+  storage_buffer_descriptor_heap_ =
+      BufferDescriptorHeap(*device_, vk::DescriptorType::eStorageBuffer, 1024 * 1024);
+  storage_image_descriptor_heap_ =
+      ImageDescriptorHeap(*device_, vk::DescriptorType::eStorageImage, 1024 * 1024);
+  sampled_image_descriptor_heap_ =
+      ImageDescriptorHeap(*device_, vk::DescriptorType::eSampledImage, 1024 * 1024);
   sampler_descriptor_heap_ =
-      ResourceDescriptorHeap(*device_, vk::DescriptorType::eSampler, 1024 * 1024);
+      SamplerDescriptorHeap(*device_, vk::DescriptorType::eSampler, 1024 * 1024);
+  // Create descriptor set allocator
+  descriptor_set_allocator_ = DescriptorSetAllocator(*device_);
   // Create allocator
   {
     VmaVulkanFunctions vma_vk_funcs{};
@@ -251,14 +253,23 @@ bool Context::isExtensionEnabled(std::string_view name) const noexcept {
 }
 
 vk::Result Context::acquireNextImage(vk::Semaphore image_available) noexcept {
-  ZoneScopedN("acquireNextImage");
+  ZoneScoped;
   return device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, image_available, {},
                                       &current_swapchain_image_);
 }
 
 vk::Result Context::presentImage(vk::Semaphore render_finished) const noexcept {
-  ZoneScopedN("presentImage");
+  ZoneScoped;
   vk::PresentInfoKHR present_info{render_finished, *swapchain_, current_swapchain_image_};
   return device_->getQueue(queue_family_index_, 0).presentKHR(&present_info);
+}
+
+void Context::flush() {
+  storage_buffer_descriptor_heap_.flush();
+  storage_image_descriptor_heap_.flush();
+  sampled_image_descriptor_heap_.flush();
+  sampler_descriptor_heap_.flush();
+
+  staging_buffer_.flush();
 }
 } // namespace gfx

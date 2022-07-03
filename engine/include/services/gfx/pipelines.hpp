@@ -3,6 +3,7 @@
 
 #include "common/cache.hpp"
 #include "descriptors.hpp"
+#include "resources.hpp"
 #include "shaders.hpp"
 
 #include <vulkan/vulkan.hpp>
