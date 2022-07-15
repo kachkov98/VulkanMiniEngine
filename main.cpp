@@ -73,14 +73,15 @@ private:
     ImGui::Render();
     // Render
     auto &context = vme::Engine::get<gfx::Context>();
+    auto &swapchain = context.getSwapchain();
     auto &frame = context.getCurrentFrame();
     auto cmd_buf = frame.getCommandBuffer();
-    auto extent = context.getSwapchainExtent();
-    if (recreateSwapchainIfNeeded(context.acquireNextImage(frame.getImageAvailableSemaphore())))
+    auto extent = swapchain.getExtent();
+    if (recreateSwapchainIfNeeded(swapchain.acquireImage(frame.getImageAvailableSemaphore())))
       return;
     frame.reset();
     vk::RenderingAttachmentInfo color_attachment{
-        context.getCurrentImageView(),
+        swapchain.getCurrentImageView(),
         vk::ImageLayout::eColorAttachmentOptimal,
         vk::ResolveModeFlagBits::eNone,
         {},
@@ -97,7 +98,7 @@ private:
         vk::ImageLayout::eColorAttachmentOptimal,
         {},
         {},
-        context.getCurrentImage(),
+        swapchain.getCurrentImage(),
         vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
     vk::ImageMemoryBarrier2 image_barrier2{
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,
@@ -108,7 +109,7 @@ private:
         vk::ImageLayout::eColorAttachmentOptimal,
         {},
         {},
-        context.getCurrentImage(),
+        swapchain.getCurrentImage(),
         vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
     vk::ImageMemoryBarrier2 image_barrier3{
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,
@@ -119,7 +120,7 @@ private:
         vk::ImageLayout::ePresentSrcKHR,
         {},
         {},
-        context.getCurrentImage(),
+        swapchain.getCurrentImage(),
         vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
     cmd_buf.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
     cmd_buf.pipelineBarrier2({vk::DependencyFlags{}, {}, {}, image_barrier1});
@@ -130,7 +131,7 @@ private:
     TracyVkCollect(frame.getTracyVkCtx(), cmd_buf);
     cmd_buf.end();
     frame.submit();
-    if (recreateSwapchainIfNeeded(context.presentImage(frame.getRenderFinishedSemaphore())))
+    if (recreateSwapchainIfNeeded(swapchain.presentImage(frame.getRenderFinishedSemaphore())))
       return;
   }
 
@@ -147,9 +148,9 @@ private:
       auto &context = vme::Engine::get<gfx::Context>();
       auto &window = vme::Engine::get<wsi::Window>();
       context.waitIdle();
-      context.recreateSwapchain(window.getFramebufferSize());
+      context.getSwapchain().recreate(window.getFramebufferSize());
       static_cast<rg::ForwardPass *>(forward_pass_.get())
-          ->onSwapchainResize(context.getSwapchainExtent());
+          ->onSwapchainResize(context.getSwapchain().getExtent());
       return true;
     }
     default:

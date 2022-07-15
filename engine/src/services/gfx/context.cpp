@@ -2,7 +2,6 @@
 #include "services/wsi/window.hpp"
 
 #include <GLFW/glfw3.h>
-#include <Tracy.hpp>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -95,7 +94,7 @@ Context::Context(const wsi::Window &window) {
     physical_device_ = physical_devices[0];
     spdlog::info("[gfx] Selected device {}", physical_device_.getProperties().deviceName);
     auto available_extensions = physical_device_.enumerateDeviceExtensionProperties();
-    auto extension_supported = [&available_extensions](std::string_view extension) {
+    auto extension_supported = [&available_extensions](const std::string_view extension) {
       return std::find_if(available_extensions.begin(), available_extensions.end(),
                           [extension](const vk::ExtensionProperties &properties) {
                             return properties.extensionName == extension;
@@ -119,12 +118,6 @@ Context::Context(const wsi::Window &window) {
     if (glfwCreateWindowSurface(*instance_, window.getHandle(), nullptr, &surface) != VK_SUCCESS)
       throw std::runtime_error("glfwCreateWindowSurface failed");
     surface_ = vk::UniqueSurfaceKHR(surface, *instance_);
-    surface_format_ =
-        vk::SurfaceFormatKHR{vk::Format::eB8G8R8A8Unorm, vk::ColorSpaceKHR::eSrgbNonlinear};
-    std::vector<vk::SurfaceFormatKHR> formats = physical_device_.getSurfaceFormatsKHR(*surface_);
-    if (std::none_of(formats.begin(), formats.end(),
-                     [&](const auto &surface_format) { return surface_format == surface_format_; }))
-      throw std::runtime_error("Default format (B8G8R8A8_SRGB) not supported by surface");
   }
   // Create device and queue
   {
@@ -161,7 +154,8 @@ Context::Context(const wsi::Window &window) {
     VULKAN_HPP_DEFAULT_DISPATCHER.init(*device_);
   }
   // Create swapchain
-  recreateSwapchain(window.getFramebufferSize());
+  swapchain_ = Swapchain(physical_device_, *surface_, *device_, queue_family_index_, 0);
+  swapchain_.recreate(window.getFramebufferSize());
   // Create resource caches
   descriptor_set_layout_cache_ = DescriptorSetLayoutCache(*device_);
   shader_module_cache_ = ShaderModuleCache(*device_);
@@ -203,65 +197,9 @@ Context::Context(const wsi::Window &window) {
     frame = Frame(physical_device_, *device_, queue_family_index_, 0, *allocator_);
 }
 
-void Context::recreateSwapchain(glm::uvec2 new_extent) {
-  if (!new_extent.x || !new_extent.y)
-    return;
-  auto surface_capabilities = physical_device_.getSurfaceCapabilitiesKHR(*surface_);
-  swapchain_extent_ =
-      vk::Extent2D{std::clamp(new_extent.x, surface_capabilities.minImageExtent.width,
-                              surface_capabilities.maxImageExtent.width),
-                   std::clamp(new_extent.y, surface_capabilities.minImageExtent.height,
-                              surface_capabilities.maxImageExtent.height)};
-  num_swapchain_images_ = std::max(num_swapchain_images_, surface_capabilities.minImageCount);
-  if (surface_capabilities.maxImageCount)
-    num_swapchain_images_ = std::min(num_swapchain_images_, surface_capabilities.maxImageCount);
-  auto present_modes = physical_device_.getSurfacePresentModesKHR(*surface_);
-  auto present_mode = vk::PresentModeKHR::eFifo;
-  if (auto it = std::find(present_modes.begin(), present_modes.end(), vk::PresentModeKHR::eMailbox);
-      it != present_modes.end())
-    present_mode = *it;
-  swapchain_ = device_->createSwapchainKHRUnique({{},
-                                                  *surface_,
-                                                  num_swapchain_images_,
-                                                  surface_format_.format,
-                                                  surface_format_.colorSpace,
-                                                  swapchain_extent_,
-                                                  1,
-                                                  vk::ImageUsageFlagBits::eColorAttachment,
-                                                  vk::SharingMode::eExclusive,
-                                                  {},
-                                                  vk::SurfaceTransformFlagBitsKHR::eIdentity,
-                                                  vk::CompositeAlphaFlagBitsKHR::eOpaque,
-                                                  present_mode,
-                                                  true,
-                                                  *swapchain_});
-  swapchain_images_ = device_->getSwapchainImagesKHR(*swapchain_);
-  swapchain_image_views_.clear();
-  for (auto image : swapchain_images_) {
-    vk::ImageViewCreateInfo image_view_create_info(
-        vk::ImageViewCreateFlags{}, image, vk::ImageViewType::e2D, surface_format_.format,
-        vk::ComponentMapping{},
-        vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
-    swapchain_image_views_.push_back(device_->createImageViewUnique(image_view_create_info));
-  }
-  spdlog::info("[gfx] Swapchain extent: {}x{}", swapchain_extent_.width, swapchain_extent_.height);
-}
-
 bool Context::isExtensionEnabled(std::string_view name) const noexcept {
   return std::find(enabled_extensions_.begin(), enabled_extensions_.end(), name) !=
          enabled_extensions_.end();
-}
-
-vk::Result Context::acquireNextImage(vk::Semaphore image_available) noexcept {
-  ZoneScoped;
-  return device_->acquireNextImageKHR(*swapchain_, UINT64_MAX, image_available, {},
-                                      &current_swapchain_image_);
-}
-
-vk::Result Context::presentImage(vk::Semaphore render_finished) const noexcept {
-  ZoneScoped;
-  vk::PresentInfoKHR present_info{render_finished, *swapchain_, current_swapchain_image_};
-  return device_->getQueue(queue_family_index_, 0).presentKHR(&present_info);
 }
 
 void Context::flush() {

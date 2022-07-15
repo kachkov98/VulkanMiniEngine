@@ -48,7 +48,7 @@ ImGuiPass::ImGuiPass() : Pass("ImGui", vk::PipelineStageFlagBits2::eAllGraphics)
             .rasterization(raster_state)
             .dynamicState(vk::DynamicState::eViewport)
             .dynamicState(vk::DynamicState::eScissor)
-            .colorAttachment(context.getSurfaceFormat().format, blend_state)
+            .colorAttachment(context.getSwapchain().getFormat(), blend_state)
             .build();
   }
   // Create font resources
@@ -113,10 +113,10 @@ void ImGuiPass::execute(gfx::Frame &frame) {
       vk::BufferUsageFlagBits::eIndexBuffer, draw_data->TotalIdxCount);
 
   auto cmd_buf = frame.getCommandBuffer();
-  vk::RenderingAttachmentInfo color_attachment{context.getCurrentImageView(),
+  vk::RenderingAttachmentInfo color_attachment{context.getSwapchain().getCurrentImageView(),
                                                vk::ImageLayout::eColorAttachmentOptimal};
   cmd_buf.beginRendering(
-      {vk::RenderingFlags{}, vk::Rect2D{{}, context.getSwapchainExtent()}, 1, 0, color_attachment});
+      {vk::RenderingFlags{}, vk::Rect2D{{}, context.getSwapchain().getExtent()}, 1, 0, color_attachment});
   pipeline_.bind(cmd_buf);
   pipeline_.setPushConstant<TransformData>(
       cmd_buf, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0,

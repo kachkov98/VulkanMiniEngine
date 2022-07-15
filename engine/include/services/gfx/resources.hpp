@@ -13,7 +13,7 @@ public:
   class UniqueHandle {
   public:
     UniqueHandle() = default;
-    UniqueHandle(ResourceDescriptorHeap *owner, uint32_t index) : owner_(owner), index_(index) {}
+    UniqueHandle(ResourceDescriptorHeap &owner, uint32_t index) : owner_(&owner), index_(index) {}
     UniqueHandle(const UniqueHandle &rhs) = delete;
     UniqueHandle(UniqueHandle &&rhs) noexcept : owner_(rhs.owner_), index_(rhs.release()) {}
     UniqueHandle &operator=(const UniqueHandle &rhs) = delete;
@@ -51,37 +51,8 @@ public:
   ResourceDescriptorHeap(vk::Device device, vk::DescriptorType type, uint32_t size,
                          uint32_t binding = 0);
 
-  vk::DescriptorSetLayout getLayout() const noexcept { return *descriptor_set_layout_; }
   vk::DescriptorSet get() const noexcept { return descriptor_set_; }
-
-  uint32_t allocate(vk::Buffer buffer, vk::DeviceSize offset = 0,
-                    vk::DeviceSize range = VK_WHOLE_SIZE) {
-    assert(type_ == vk::DescriptorType::eStorageBuffer);
-    auto id = allocate();
-    descriptors_.emplace_back(id, vk::DescriptorBufferInfo{buffer, offset, range});
-    return id;
-  }
-  UniqueHandle allocateUnique(vk::Buffer buffer, vk::DeviceSize offset = 0,
-                              vk::DeviceSize range = VK_WHOLE_SIZE) {
-    return UniqueHandle(this, allocate(buffer, offset, range));
-  }
-  uint32_t allocate(vk::ImageView image_view, vk::ImageLayout image_layout) {
-    assert(type_ == vk::DescriptorType::eStorageImage ||
-           type_ == vk::DescriptorType::eSampledImage);
-    auto id = allocate();
-    descriptors_.emplace_back(id, vk::DescriptorImageInfo{{}, image_view, image_layout});
-    return id;
-  }
-  UniqueHandle allocateUnique(vk::ImageView image_view, vk::ImageLayout image_layout) {
-    return UniqueHandle(this, allocate(image_view, image_layout));
-  }
-  uint32_t allocate(vk::Sampler sampler) {
-    assert(type_ == vk::DescriptorType::eSampler);
-    auto id = allocate();
-    descriptors_.emplace_back(id, vk::DescriptorImageInfo{sampler});
-    return id;
-  }
-  UniqueHandle allocateUnique(vk::Sampler sampler) { return UniqueHandle(this, allocate(sampler)); }
+  vk::DescriptorSetLayout getLayout() const noexcept { return *descriptor_set_layout_; }
 
   void free(uint32_t id) noexcept { free_list_.push_back(id); }
 
@@ -122,7 +93,7 @@ public:
   }
   UniqueHandle allocateUnique(vk::Buffer buffer, vk::DeviceSize offset = 0,
                               vk::DeviceSize range = VK_WHOLE_SIZE) {
-    return UniqueHandle(this, allocate(buffer, offset, range));
+    return UniqueHandle(*this, allocate(buffer, offset, range));
   }
 };
 
@@ -139,7 +110,7 @@ public:
     return id;
   }
   UniqueHandle allocateUnique(vk::ImageView image_view, vk::ImageLayout image_layout) {
-    return UniqueHandle(this, allocate(image_view, image_layout));
+    return UniqueHandle(*this, allocate(image_view, image_layout));
   }
 };
 
@@ -155,7 +126,9 @@ public:
     descriptors_.emplace_back(id, vk::DescriptorImageInfo{sampler});
     return id;
   }
-  UniqueHandle allocateUnique(vk::Sampler sampler) { return UniqueHandle(this, allocate(sampler)); }
+  UniqueHandle allocateUnique(vk::Sampler sampler) {
+    return UniqueHandle(*this, allocate(sampler));
+  }
 };
 
 struct BufferView {

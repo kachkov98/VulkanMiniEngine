@@ -14,6 +14,7 @@ target_sources(engine
     "src/services/gfx/resources.cpp"
     "src/services/gfx/shaders.cpp"
     "src/services/gfx/staging_buffer.cpp"
+    "src/services/gfx/swapchain.cpp"
     "src/renderer/render_graph.cpp"
     "src/renderer/forward_pass.cpp"
     "src/renderer/imgui_pass.cpp"

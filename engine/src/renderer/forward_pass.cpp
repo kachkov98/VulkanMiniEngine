@@ -9,7 +9,7 @@ namespace rg {
 ForwardPass::ForwardPass(const vme::Scene &scene)
     : Pass("Forward", vk::PipelineStageFlagBits2::eAllGraphics), scene_(&scene) {
   auto &context = vme::Engine::get<gfx::Context>();
-  onSwapchainResize(context.getSwapchainExtent());
+  onSwapchainResize(context.getSwapchain().getExtent());
   // Create pipeline
   {
     auto &shader_module_cache = context.getShaderModuleCache();
@@ -52,7 +52,7 @@ ForwardPass::ForwardPass(const vme::Scene &scene)
             .depthStencil({{}, true, true, vk::CompareOp::eLess})
             .dynamicState(vk::DynamicState::eViewport)
             .dynamicState(vk::DynamicState::eScissor)
-            .colorAttachment(context.getSurfaceFormat().format, blend_state)
+            .colorAttachment(context.getSwapchain().getFormat(), blend_state)
             .depthAttachment(depth_format_)
             .build();
   }
@@ -110,10 +110,10 @@ void ForwardPass::setup(PassBuilder &builder) {}
 
 void ForwardPass::execute(gfx::Frame &frame) {
   auto &context = vme::Engine::get<gfx::Context>();
-  auto extent = context.getSwapchainExtent();
+  auto extent = context.getSwapchain().getExtent();
   auto cmd_buf = frame.getCommandBuffer();
   vk::RenderingAttachmentInfo color_attachment{
-      context.getCurrentImageView(),
+      context.getSwapchain().getCurrentImageView(),
       vk::ImageLayout::eColorAttachmentOptimal,
       vk::ResolveModeFlagBits::eNone,
       {},

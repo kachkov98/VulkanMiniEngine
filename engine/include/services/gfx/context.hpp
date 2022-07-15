@@ -6,8 +6,8 @@
 #include "resources.hpp"
 #include "shaders.hpp"
 #include "staging_buffer.hpp"
+#include "swapchain.hpp"
 
-#include <glm/vec2.hpp>
 #include <vulkan/vulkan.hpp>
 
 #include <string_view>
@@ -27,18 +27,10 @@ public:
   bool isExtensionEnabled(std::string_view name) const noexcept;
 
   vk::SurfaceKHR getSurface() const noexcept { return *surface_; }
-  vk::SurfaceFormatKHR getSurfaceFormat() const noexcept { return surface_format_; }
 
   vk::Device getDevice() const noexcept { return *device_; }
 
-  void recreateSwapchain(glm::uvec2 new_extent);
-  vk::Image getCurrentImage() const noexcept { return swapchain_images_[current_swapchain_image_]; }
-  vk::ImageView getCurrentImageView() const noexcept {
-    return *swapchain_image_views_[current_swapchain_image_];
-  }
-  vk::Extent2D getSwapchainExtent() const noexcept { return swapchain_extent_; };
-  vk::Result acquireNextImage(vk::Semaphore image_available) noexcept;
-  vk::Result presentImage(vk::Semaphore render_finished) const noexcept;
+  Swapchain &getSwapchain() noexcept { return swapchain_; }
 
   DescriptorSetLayoutCache &getDescriptorSetLayoutCache() noexcept {
     return descriptor_set_layout_cache_;
@@ -80,16 +72,11 @@ private:
   std::vector<const char *> enabled_extensions_ = {};
 
   vk::UniqueSurfaceKHR surface_ = {};
-  vk::SurfaceFormatKHR surface_format_ = {};
 
   vk::UniqueDevice device_ = {};
   uint32_t queue_family_index_ = -1u;
 
-  uint32_t current_swapchain_image_{0}, num_swapchain_images_{3};
-  vk::Extent2D swapchain_extent_ = {};
-  vk::UniqueSwapchainKHR swapchain_ = {};
-  std::vector<vk::Image> swapchain_images_{};
-  std::vector<vk::UniqueImageView> swapchain_image_views_{};
+  Swapchain swapchain_;
 
   DescriptorSetLayoutCache descriptor_set_layout_cache_;
   ShaderModuleCache shader_module_cache_;
