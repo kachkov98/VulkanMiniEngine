@@ -15,6 +15,7 @@ find_package(Tracy CONFIG REQUIRED)
 find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(zstd CONFIG REQUIRED)
 
 add_subdirectory(engine)
 add_subdirectory(shaders)
