@@ -1,7 +1,7 @@
 #ifndef PIPELINES_HPP
 #define PIPELINES_HPP
 
-#include "common/cache.hpp"
+#include "common/cache_factory.hpp"
 #include "descriptors.hpp"
 #include "resources.hpp"
 #include "shaders.hpp"
@@ -16,8 +16,8 @@
 namespace gfx {
 
 class PipelineLayoutCache final
-    : public vme::Cache<PipelineLayoutCache, vk::PipelineLayoutCreateInfo,
-                        vk::UniquePipelineLayout> {
+    : public vme::CacheFactory<PipelineLayoutCache, vk::PipelineLayoutCreateInfo,
+                               vk::UniquePipelineLayout> {
 public:
   PipelineLayoutCache(vk::Device device = {}) : device_(device) {}
 

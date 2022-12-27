@@ -1,6 +1,8 @@
 #ifndef RESOURCES_HPP
 #define RESOURCES_HPP
 
+#include "common/small_vector.hpp"
+
 #include "allocator.hpp"
 #include "staging_buffer.hpp"
 
@@ -154,8 +156,7 @@ public:
 
 private:
   vma::UniqueBuffer buffer_;
-  // TODO: SmallVector (usually number of allocated descriptors is 1)
-  std::vector<ResourceDescriptorHeap::UniqueHandle> handles_;
+  vme::SmallVector<ResourceDescriptorHeap::UniqueHandle, 1> handles_;
 };
 
 struct ImageView {
@@ -184,8 +185,7 @@ public:
 
 private:
   vma::UniqueImage image_;
-  // TODO: SmallVector (usually number of allocated descriptors is 1)
-  std::vector<std::pair<vk::UniqueImageView, ResourceDescriptorHeap::UniqueHandle>> handles_;
+  vme::SmallVector<std::pair<vk::UniqueImageView, ResourceDescriptorHeap::UniqueHandle>, 1> handles_;
 };
 
 class Sampler final {
@@ -200,8 +200,7 @@ public:
 
 private:
   vk::UniqueSampler sampler_;
-  // TODO: SmallVector (usually number of allocated descriptors is 1)
-  std::vector<ResourceDescriptorHeap::UniqueHandle> handles_;
+  vme::SmallVector<ResourceDescriptorHeap::UniqueHandle, 1> handles_;
 };
 } // namespace gfx
 

@@ -1,3 +1,19 @@
+find_package(EnTT CONFIG REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
+find_package(glm CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(Ktx CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_package(Taskflow CONFIG REQUIRED)
+find_package(Tracy CONFIG REQUIRED)
+find_package(unofficial-im3d CONFIG REQUIRED)
+find_package(unofficial-spirv-reflect CONFIG REQUIRED)
+find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
+
+find_path(JOLT_INCLUDE_DIR Jolt/Jolt.h)
+find_library(JOLT_LIBRARY Jolt)
+
 add_library(engine STATIC)
 
 target_sources(engine
@@ -23,6 +39,7 @@ target_sources(engine
 target_include_directories(engine
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${JOLT_INCLUDE_DIR}
 )
 
 target_compile_features(engine PUBLIC cxx_std_20)
@@ -32,21 +49,22 @@ target_compile_definitions(engine
     VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
     VMA_STATIC_VULKAN_FUNCTIONS=0
     VMA_DYNAMIC_VULKAN_FUNCTIONS=1
-    IMGUI_USER_CONFIG="imgui_config.h")
+    IM3D_CONFIG="configs/im3d.h"
+    IMGUI_USER_CONFIG="configs/imgui.h")
 
 target_link_libraries(engine
   PUBLIC
-    cxxopts::cxxopts
     EnTT::EnTT
     glfw
     glm::glm
     imgui::imgui
-    imguizmo::imguizmo
     KTX::ktx
     nlohmann_json::nlohmann_json
     spdlog::spdlog
     Taskflow::Taskflow
     Tracy::TracyClient
+    unofficial::im3d::im3d
     unofficial::spirv-reflect::spirv-reflect
     unofficial::vulkan-memory-allocator::vulkan-memory-allocator
-    Vulkan::Vulkan)
+    Vulkan::Vulkan
+    ${JOLT_LIBRARY})

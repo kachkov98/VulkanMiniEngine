@@ -1,6 +1,6 @@
 #include "services/gfx/swapchain.hpp"
 
-#include <Tracy.hpp>
+#include <tracy/TracyVulkan.hpp>
 #include <spdlog/spdlog.h>
 
 namespace gfx {

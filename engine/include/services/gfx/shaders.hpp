@@ -1,7 +1,7 @@
 #ifndef SHADERS_HPP
 #define SHADERS_HPP
 
-#include "common/cache.hpp"
+#include "common/cache_factory.hpp"
 
 #include <spirv_reflect.h>
 #include <vulkan/vulkan.hpp>
@@ -36,7 +36,8 @@ private:
   spv_reflect::ShaderModule reflection_;
 };
 
-class ShaderModuleCache final : public vme::Cache<ShaderModuleCache, std::string, ShaderModule> {
+class ShaderModuleCache final
+    : public vme::CacheFactory<ShaderModuleCache, std::string, ShaderModule> {
 public:
   ShaderModuleCache(vk::Device device = {}) : device_(device) {}
 

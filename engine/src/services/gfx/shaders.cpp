@@ -14,7 +14,7 @@
 
 namespace gfx {
 static const std::filesystem::path shaders_path =
-    std::filesystem::current_path() / ".." / "shaders";
+    std::filesystem::current_path() / ".." / ".." / "shaders";
 
 ShaderModule::ShaderModule(vk::Device device, const Code &code)
     : shader_module_(device.createShaderModuleUnique({{}, code})), reflection_(code) {

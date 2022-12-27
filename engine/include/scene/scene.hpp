@@ -1,7 +1,11 @@
 #ifndef SCENE_HPP
 #define SCENE_HPP
 
+#include <entt/entity/registry.hpp>
 #include <glm/mat4x4.hpp>
+
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/PhysicsSystem.h>
 
 #include "services/gfx/context.hpp"
 
@@ -12,6 +16,14 @@ class Mesh;
 } // namespace tinygltf
 
 namespace vme {
+
+class World {
+public:
+private:
+  entt::registry registry_;
+  JPH::PhysicsSystem physics_system_;
+};
+
 class Scene {
 public:
   struct Texture {
@@ -39,8 +51,8 @@ public:
   Scene() = default;
   Scene(gfx::Context &context, const tinygltf::Model &model);
 
-  const std::vector<glm::mat4> getTransforms() const noexcept { return transforms_; }
-  const std::vector<Material> getMaterials() const noexcept { return materials_; }
+  const std::vector<glm::mat4> &getTransforms() const noexcept { return transforms_; }
+  const std::vector<Material> &getMaterials() const noexcept { return materials_; }
   const std::vector<Mesh> &getMeshes() const noexcept { return meshes_; }
 
 private:

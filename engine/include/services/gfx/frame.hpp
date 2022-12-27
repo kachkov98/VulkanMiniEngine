@@ -4,7 +4,7 @@
 #include "allocator.hpp"
 #include "descriptors.hpp"
 
-#include <TracyVulkan.hpp>
+#include <tracy/TracyVulkan.hpp>
 
 namespace gfx {
 class UniqueTracyVkCtx final {

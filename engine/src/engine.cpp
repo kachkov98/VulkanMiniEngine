@@ -5,7 +5,7 @@
 #include "services/wsi/window.hpp"
 
 #include <GLFW/glfw3.h>
-#include <Tracy.hpp>
+#include <tracy/Tracy.hpp>
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 #include <taskflow/taskflow.hpp>

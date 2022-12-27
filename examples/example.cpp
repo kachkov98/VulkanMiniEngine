@@ -32,7 +32,7 @@ private:
       tinygltf::TinyGLTF loader;
       tinygltf::Model model;
       std::string err, warn;
-      if (!loader.LoadBinaryFromFile(&model, &err, &warn, "../../../DamagedHelmet.glb")) {
+      if (!loader.LoadBinaryFromFile(&model, &err, &warn, "../../../../DamagedHelmet.glb")) {
         if (!warn.empty())
           spdlog::warn("[tinygltf] {}", warn);
         if (!err.empty())

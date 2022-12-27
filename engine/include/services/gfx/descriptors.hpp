@@ -1,7 +1,7 @@
 #ifndef DESCRIPTORS_HPP
 #define DESCRIPTORS_HPP
 
-#include "common/cache.hpp"
+#include "common/cache_factory.hpp"
 
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_hash.hpp>
@@ -12,8 +12,8 @@
 namespace gfx {
 
 class DescriptorSetLayoutCache final
-    : public vme::Cache<DescriptorSetLayoutCache, vk::DescriptorSetLayoutCreateInfo,
-                        vk::UniqueDescriptorSetLayout> {
+    : public vme::CacheFactory<DescriptorSetLayoutCache, vk::DescriptorSetLayoutCreateInfo,
+                               vk::UniqueDescriptorSetLayout> {
 public:
   DescriptorSetLayoutCache(vk::Device device = {}) : device_(device) {}
 

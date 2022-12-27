@@ -6,11 +6,12 @@
     "entt",
     "glfw3",
     "glm",
+    "im3d",
     {
       "name": "imgui",
       "features": [ "glfw-binding" ]
     },
-    "imguizmo",
+    "joltphysics",
     "ktx",
     "nlohmann-json",
     "spdlog",
@@ -18,7 +19,10 @@
     "stb",
     "taskflow",
     "tinygltf",
-    "tracy",
+    {
+      "name": "tracy",
+      "features": [ "cli-tools", "gui-tools" ]
+    },
     "vulkan",
     "vulkan-memory-allocator"
   ]

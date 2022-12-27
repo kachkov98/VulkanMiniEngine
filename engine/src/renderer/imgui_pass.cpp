@@ -55,7 +55,9 @@ ImGuiPass::ImGuiPass() : Pass("ImGui", vk::PipelineStageFlagBits2::eAllGraphics)
   {
     unsigned char *pixels;
     int width, height, bytes_per_pixel;
-    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height, &bytes_per_pixel);
+    ImFontAtlas *Font = ImGui::GetIO().Fonts;
+    Font->AddFontDefault();
+    Font->GetTexDataAsRGBA32(&pixels, &width, &height, &bytes_per_pixel);
     const vk::Extent3D image_extent{static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
     const vk::Format image_format = vk::Format::eR8G8B8A8Unorm;
     const vk::ImageSubresourceLayers subresource_layers{vk::ImageAspectFlagBits::eColor, 0, 0, 1};
