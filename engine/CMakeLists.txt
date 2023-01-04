@@ -2,10 +2,8 @@ find_package(EnTT CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
-find_package(Ktx CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
-find_package(Taskflow CONFIG REQUIRED)
 find_package(Tracy CONFIG REQUIRED)
 find_package(unofficial-im3d CONFIG REQUIRED)
 find_package(unofficial-spirv-reflect CONFIG REQUIRED)
@@ -58,10 +56,8 @@ target_link_libraries(engine
     glfw
     glm::glm
     imgui::imgui
-    KTX::ktx
     nlohmann_json::nlohmann_json
     spdlog::spdlog
-    Taskflow::Taskflow
     Tracy::TracyClient
     unofficial::im3d::im3d
     unofficial::spirv-reflect::spirv-reflect

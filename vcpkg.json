@@ -12,12 +12,10 @@
       "features": [ "glfw-binding" ]
     },
     "joltphysics",
-    "ktx",
     "nlohmann-json",
     "spdlog",
     "spirv-reflect",
     "stb",
-    "taskflow",
     "tinygltf",
     {
       "name": "tracy",

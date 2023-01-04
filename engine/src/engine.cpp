@@ -8,13 +8,11 @@
 #include <tracy/Tracy.hpp>
 #include <imgui.h>
 #include <spdlog/spdlog.h>
-#include <taskflow/taskflow.hpp>
 
 #include <stdexcept>
 
 namespace vme {
 
-using Executor = entt::locator<tf::Executor>;
 using Window = entt::locator<wsi::Window>;
 using Input = entt::locator<wsi::Input>;
 using Context = entt::locator<gfx::Context>;
@@ -55,7 +53,6 @@ void Application::run(unsigned update_freq) {
   // Application termination
   {
     ZoneScopedN("Terminate");
-    Engine::get<tf::Executor>().wait_for_all();
     Engine::get<gfx::Context>().waitIdle();
     onTerminate();
   }
@@ -80,9 +77,6 @@ void Engine::init() {
   // Graphics context
   Context::emplace(Window::value());
   spdlog::info("Vulkan context created successfully");
-  // Thread pool
-  Executor::emplace(/*default number of workers*/);
-  spdlog::info("Created thread pool with {} workers", Executor::value().num_workers());
 
   spdlog::info("Engine initialized successfully");
 }
@@ -90,7 +84,6 @@ void Engine::init() {
 void Engine::terminate() {
   spdlog::info("Engine termination started");
   Context::value().getPipelineCache().save();
-  Executor::reset();
   Context::reset();
   Input::reset();
   Window::reset();
