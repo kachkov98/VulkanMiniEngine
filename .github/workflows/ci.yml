@@ -15,7 +15,7 @@ jobs:
       - name: Install missing dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev libtbb-dev
+          sudo apt-get install xorg-dev libtbb-dev libdbus-1-dev
         if: runner.os == 'Linux'
 
       - uses: actions/checkout@v2
